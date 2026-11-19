@@ -1,0 +1,16 @@
+{
+  "$comment": "Copia estos scripts al package.json de cada librería. En repos pnpm cambia 'npm run' por 'pnpm' dentro de release:verify.",
+  "scripts": {
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "build": "bob build",
+    "changeset": "changeset",
+    "release:check": "node scripts/check-versions.mjs",
+    "release:bump": "changeset version",
+    "release:verify": "npm run lint && npm run typecheck && npm test && npm run build",
+    "release:tag": "node scripts/tag-and-push.mjs"
+  },
+  "publishConfig": { "registry": "https://[ARTIFACTORY_HOST]/artifactory/api/npm/[NPM_REPO]/" },
+  "devDependencies": { "@changesets/cli": "^2.29.8", "react-native-builder-bob": "^0.44.1" }
+}

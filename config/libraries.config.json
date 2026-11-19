@@ -1,0 +1,20 @@
+{
+  "$comment": "Lista blanca: el panel solo opera estos paquetes. 'line' y 'color' alimentan el mapa de metro de la UI.",
+  "wrapper": {
+    "name": "org-rn-brownfield-wrapper",
+    "repo": "org-rn-brownfield-wrapper"
+  },
+  "libraries": [
+    {
+      "name": "@org/rn-design-system",
+      "repo": "rn-design-system",
+      "line": "DS",
+      "color": "#D6006F"
+    },
+    { "name": "@org/rn-auth", "repo": "rn-auth", "line": "AU", "color": "#0057B8" },
+    { "name": "@org/rn-networking", "repo": "rn-networking", "line": "NW", "color": "#00965E" },
+    { "name": "@org/rn-analytics", "repo": "rn-analytics", "line": "AN", "color": "#E87722" },
+    { "name": "@org/rn-biometrics", "repo": "rn-biometrics", "line": "BI", "color": "#8A2B8E" },
+    { "name": "@org/rn-storage", "repo": "rn-storage", "line": "ST", "color": "#8C6A2E" }
+  ]
+}

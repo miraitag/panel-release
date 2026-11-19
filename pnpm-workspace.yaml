@@ -1,0 +1,7 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# pnpm 10 bloquea scripts de instalación por defecto; esbuild (vite/tsup/tsx) lo necesita.
+onlyBuiltDependencies:
+  - esbuild
