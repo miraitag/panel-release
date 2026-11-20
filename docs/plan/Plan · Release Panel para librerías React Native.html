@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan · Release Panel para librerías React Native</title>
+<meta name="description" content="Plan técnico para GitHub Copilot: panel de releases de librerías React Native en Bitbucket, publicación vía Jenkins a Artifactory y actualización de un wrapper brownfield (Callstack). Node.js, pnpm + npm, sin Vite.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:light;
+  --bg:#F6F7F9;--surface:#FFFFFF;--surface2:#F8F9FB;--fg:#14171F;--fg2:#3D4452;--muted:#5B6372;
+  --line:#E3E6EB;--line2:#EEF0F3;--line-strong:#C9CED6;
+  --accent:#2450D8;--accent-ink:#1A3BA6;--accent-soft:#EEF2FD;--accent-line:#C9D6F8;
+  --code:#0F1219;--code-head:#171B24;--code-line:#262B36;--code-fg:#E6E9EF;--code-muted:#7D879A;
+  --hero:#10131A;--hero-border:#10131A;
+  --series-1:#2a78d6;--series-2:#eb6834;
+  --good:#0ca30c;--warning:#fab219;--serious:#ec835a;--critical:#d03b3b;
+  --good-soft:#E6F4EC;--good-ink:#0E5E39;--warn-soft:#FFF3DB;--warn-ink:#7A4700;--warn-line:#F1D9A8;
+  --bad-soft:#FDECEA;--bad-ink:#8F1D13;--chip-bg:#EEF0F3;
+  --shadow:0 10px 30px rgba(20,23,31,.08);
+  --r:12px;
+  /* syntax */
+  --t-key:#8FB3FF;--t-str:#9EE6B0;--t-num:#F7B977;--t-kw:#D8A6FF;--t-com:#6F7A8E;--t-bool:#FF9DB3;--t-fn:#7FD8E8;
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0D1015;--surface:#151A21;--surface2:#1A2029;--fg:#E8EBF0;--fg2:#C3C9D4;--muted:#9AA3B3;
+  --line:#272E39;--line2:#202630;--line-strong:#3A4250;
+  --accent:#6E9BFF;--accent-ink:#A9C1FF;--accent-soft:#1A2540;--accent-line:#2C3D66;
+  --code:#0A0D12;--code-head:#12161E;--code-line:#222833;
+  --hero:#121826;--hero-border:#232C3E;
+  --series-1:#3987e5;--series-2:#d95926;
+  --good-soft:#12301F;--good-ink:#8EE0A8;--warn-soft:#33260D;--warn-ink:#F2C46B;--warn-line:#5A4419;
+  --bad-soft:#3A1715;--bad-ink:#FF9C8F;--chip-bg:#232A35;
+  --shadow:0 10px 30px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.65 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;transition:background .3s,color .3s}
+a{color:var(--accent)}a:hover{color:var(--accent-ink)}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+code{font-size:.86em;background:var(--chip-bg);color:var(--fg);padding:1px 6px;border-radius:5px}
+h1,h2,h3{letter-spacing:-.015em;line-height:1.2}
+h2{font-size:26px;margin:0 0 6px}
+h3{font-size:17px;margin:28px 0 12px}
+p{margin:0 0 12px}
+.muted{color:var(--muted)}
+.skip{position:absolute;left:-999px}.skip:focus{left:16px;top:16px;z-index:99;background:var(--surface);padding:8px 12px;border-radius:8px}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--surface) 90%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1320px;margin:0 auto;padding:10px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700}
+.progress{flex:1 1 200px;height:4px;background:var(--line2);border-radius:4px;overflow:hidden}
+.progress span{display:block;height:100%;width:0;background:var(--accent);transition:width .15s}
+.pill{font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent-ink)}
+.theme{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:999px;border:1px solid var(--line-strong);background:var(--surface);color:var(--fg);font:600 13px Inter,sans-serif;cursor:pointer}
+.theme .sun{display:none}:root[data-theme="dark"] .theme .sun{display:block}:root[data-theme="dark"] .theme .moon{display:none}
+
+/* layout */
+.wrap{max-width:1320px;margin:0 auto;padding:0 24px;display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap}
+.toc{flex:1 1 220px;max-width:260px;position:sticky;top:76px;padding:24px 0;font-size:14px}
+.toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;counter-reset:t}
+.toc a{display:flex;gap:10px;padding:7px 10px;border-radius:8px;color:var(--fg2);text-decoration:none;counter-increment:t}
+.toc a::before{content:counter(t,decimal-leading-zero);font:500 12px "JetBrains Mono",monospace;color:var(--muted);padding-top:2px}
+.toc a.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+main{flex:999 1 640px;min-width:0;padding:24px 0 96px}
+section.s{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:32px;margin:0 0 24px;scroll-margin-top:80px;transition:background .3s,border-color .3s}
+.eyebrow{font:600 12px "JetBrains Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.lead{font-size:16px;color:var(--fg2);max-width:78ch}
+
+.rv{opacity:0;transform:translateY(14px);transition:opacity .6s ease,transform .6s ease}
+.rv.in{opacity:1;transform:none}
+
+/* hero */
+.hero{background:var(--hero);border:1px solid var(--hero-border);color:#E6E9EF;border-radius:20px;padding:40px;margin:0 0 24px;overflow:hidden;position:relative}
+.hero h1{font-size:clamp(28px,4vw,44px);margin:10px 0 12px;color:#fff}
+.hero p{color:#B9C0CE;max-width:70ch;font-size:16px}
+.hero .eyebrow{color:#8FB3FF}
+.flow{width:100%;height:auto;margin-top:24px}
+.flow .node rect{fill:#1B2030;stroke:#323A4E}
+.flow .node text{fill:#E6E9EF;font:600 14px Inter,sans-serif}
+.flow .node .sub{fill:#93A0B8;font:500 11px "JetBrains Mono",monospace}
+.flow .edge{stroke:#3A4663;stroke-width:2;fill:none;stroke-dasharray:6 6;animation:dash 1.2s linear infinite}
+.flow .ext rect{stroke:#7A5A1E;stroke-dasharray:5 4}
+@keyframes dash{to{stroke-dashoffset:-24}}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:24px}
+.kpi{background:#171B26;border:1px solid #262B36;border-radius:12px;padding:14px 16px}
+.kpi b{display:block;font-size:24px;color:#fff}
+.kpi span{font-size:12px;color:#93A0B8}
+
+/* diagrams (theme aware) */
+.dg text{font-family:Inter,sans-serif}
+.dg .box{fill:var(--surface);stroke:var(--line-strong)}
+.dg .box-main{fill:var(--surface);stroke:var(--accent);stroke-width:2}
+.dg .box-soft{fill:var(--accent-soft);stroke:var(--accent-line)}
+.dg .box-ext{fill:var(--warn-soft);stroke:var(--warn-line);stroke-dasharray:5 4}
+.dg .t1{fill:var(--fg);font-weight:700;font-size:15px}
+.dg .t2{fill:var(--fg2);font-size:12px}
+.dg .t3{fill:var(--muted);font-size:11px}
+.dg .tw{fill:var(--warn-ink)}
+.dg .edge2{stroke:var(--muted);stroke-width:2;fill:none}
+.dg .ah{fill:var(--muted)}
+.dg .st-p{fill:var(--chip-bg)}.dg .st-r{fill:var(--accent)}.dg .st-d{fill:var(--good-soft)}.dg .st-f{fill:var(--bad-soft)}.dg .st-e{fill:var(--warn-soft)}
+.dg .tx-p{fill:var(--fg2)}.dg .tx-r{fill:#fff}.dg .tx-d{fill:var(--good-ink)}.dg .tx-f{fill:var(--bad-ink)}.dg .tx-e{fill:var(--warn-ink)}
+
+/* cards & tables */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.card{border:1px solid var(--line);border-radius:var(--r);padding:18px;background:var(--surface);transition:transform .2s,box-shadow .2s,border-color .2s}
+.card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.card h4{margin:6px 0 6px;font-size:15px}
+.card p{font-size:13.5px;color:var(--fg2);margin:0}
+.ico{width:36px;height:36px;border-radius:10px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:640px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line2);vertical-align:top}
+th{background:var(--surface2);font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+tr:last-child td{border-bottom:0}
+tbody tr{transition:background .15s}tbody tr:hover{background:var(--surface2)}
+.m{display:inline-block;font:600 11px "JetBrains Mono",monospace;padding:3px 8px;border-radius:6px;min-width:46px;text-align:center}
+.m.get{background:var(--good-soft);color:var(--good-ink)}.m.post{background:var(--accent-soft);color:var(--accent-ink)}
+.tag{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--warn-soft);color:var(--warn-ink);white-space:nowrap}
+.tag.blue{background:var(--accent-soft);color:var(--accent-ink)}.tag.green{background:var(--good-soft);color:var(--good-ink)}.tag.red{background:var(--bad-soft);color:var(--bad-ink)}
+.callout{display:flex;gap:12px;border-radius:var(--r);padding:14px 16px;margin:16px 0;font-size:14px}
+.callout.info{background:var(--accent-soft);border:1px solid var(--accent-line)}
+.callout.warn{background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--warn-ink)}
+
+/* ===== code blocks (editor look) ===== */
+.code{margin:0;border-radius:12px;overflow:hidden;background:var(--code);border:1px solid var(--code-line);box-shadow:var(--shadow)}
+.code-h{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--code-head);border-bottom:1px solid var(--code-line)}
+.dots{display:flex;gap:6px}.dots i{width:10px;height:10px;border-radius:50%;background:#3A4150}
+.dots i:nth-child(1){background:#E5604F}.dots i:nth-child(2){background:#E8B03A}.dots i:nth-child(3){background:#3FB27F}
+.code-file{font:500 12.5px "JetBrains Mono",monospace;color:var(--code-fg);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.code-lang{font:600 10.5px "JetBrains Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--code-muted);border:1px solid var(--code-line);padding:2px 7px;border-radius:5px}
+.code-copy{display:inline-flex;align-items:center;gap:6px;min-height:30px;border:1px solid var(--code-line);background:transparent;color:var(--code-fg);border-radius:6px;font:500 12px Inter,sans-serif;padding:0 10px;cursor:pointer}
+.code-copy:hover{background:#ffffff10}
+.code pre{margin:0;padding:14px 0;overflow-x:auto;font-size:13px;line-height:1.7;color:var(--code-fg);background:transparent;counter-reset:ln}
+.code pre code{background:none;padding:0;color:inherit;font-size:inherit;display:block;min-width:max-content}
+.code .ln{display:block;padding:0 18px 0 0}
+.code .ln::before{counter-increment:ln;content:counter(ln);display:inline-block;width:42px;padding-right:14px;text-align:right;color:#4A5366;user-select:none}
+.code .ln:hover{background:#ffffff08}
+.xk{color:var(--t-key)}.xs{color:var(--t-str)}.xn{color:var(--t-num)}.xkw{color:var(--t-kw)}.xc{color:var(--t-com);font-style:italic}.xb{color:var(--t-bool)}.xf{color:var(--t-fn)}
+.code .ln.hl{background:color-mix(in srgb,var(--accent) 22%,transparent);box-shadow:inset 3px 0 0 var(--accent)}
+
+/* tabs (pill style above editor) */
+.tabs{display:flex;flex-direction:column;gap:10px}
+.tablist{display:flex;flex-wrap:wrap;gap:6px}
+.tablist button{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);padding:0 14px;min-height:40px;border-radius:999px;font:500 13px "JetBrains Mono",monospace;color:var(--fg2);cursor:pointer;transition:all .15s}
+.tablist button:hover{border-color:var(--line-strong)}
+.tablist button[aria-selected="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.panel[hidden]{display:none}
+
+/* ===== explorer (section 4) ===== */
+.explorer{display:flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
+.ex-tree{flex:1 1 300px;min-width:0;background:var(--surface2);border-right:1px solid var(--line);padding:12px 8px;max-height:560px;overflow:auto}
+.ex-tree ul{list-style:none;margin:0;padding:0 0 0 14px}
+.ex-tree>ul{padding-left:0}
+.ex-node{display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:0 10px;border:0;background:transparent;border-radius:8px;color:var(--fg);font:500 13px "JetBrains Mono",monospace;cursor:pointer;text-align:left}
+.ex-node:hover{background:var(--line2)}
+.ex-node[aria-current="true"]{background:var(--accent-soft);color:var(--accent-ink)}
+.ex-node .chev{width:14px;color:var(--muted);transition:transform .2s;flex-shrink:0}
+.ex-node[aria-expanded="false"] .chev{transform:rotate(-90deg)}
+.ex-node .badge{margin-left:auto;font:600 10px Inter,sans-serif;padding:2px 6px;border-radius:5px;background:var(--chip-bg);color:var(--muted)}
+.ex-detail{flex:2 1 380px;min-width:0;padding:24px;display:flex;flex-direction:column;gap:14px}
+.ex-path{font:500 12.5px "JetBrains Mono",monospace;color:var(--muted)}
+.ex-title{display:flex;align-items:center;gap:12px}
+.ex-title h4{margin:0;font:700 20px "JetBrains Mono",monospace}
+.ex-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.ex-meta div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px}
+.ex-meta b{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px}
+.ex-list{margin:0;padding-left:18px;font-size:14px;color:var(--fg2)}
+.legend-row{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12.5px;color:var(--muted);margin:12px 0 0}
+.legend-row span{display:inline-flex;align-items:center;gap:6px}
+.fi{flex-shrink:0}
+
+/* ===== scripts contract (section 5) ===== */
+.pipe{display:flex;flex-wrap:wrap;align-items:stretch;gap:0;margin:8px 0 8px}
+.pipe-step{flex:1 1 200px;min-width:0;position:relative;padding:0 18px 0 0}
+.pipe-step:not(:last-child)::after{content:"";position:absolute;right:2px;top:38px;width:12px;height:12px;border-top:2px solid var(--line-strong);border-right:2px solid var(--line-strong);transform:rotate(45deg)}
+.sc{height:100%;border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--surface);display:flex;flex-direction:column;gap:10px;transition:transform .2s,box-shadow .2s,border-color .2s;cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%}
+.sc:hover,.sc[aria-pressed="true"]{transform:translateY(-3px);box-shadow:var(--shadow);border-color:var(--accent)}
+.sc-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sc-num{font:700 12px "JetBrains Mono",monospace;color:var(--muted)}
+.sc-name{display:inline-flex;align-items:center;gap:8px;font:600 14px "JetBrains Mono",monospace;padding:6px 10px;border-radius:8px;background:var(--code);color:#9EE6B0;align-self:flex-start}
+.sc-name::before{content:"$";color:#6F7A8E}
+.sc-cmd{font:500 12.5px "JetBrains Mono",monospace;color:var(--fg2);background:var(--surface2);border:1px dashed var(--line-strong);border-radius:8px;padding:8px 10px;overflow-wrap:anywhere}
+.sc-row{display:flex;flex-wrap:wrap;gap:6px}
+.sc p{margin:0;font-size:13px;color:var(--muted)}
+.sc.pnr{border-color:var(--warn-line);background:linear-gradient(var(--surface),var(--surface)) padding-box}
+.sub-chips{display:flex;flex-wrap:wrap;gap:6px}
+.sub-chips span{font:500 11.5px "JetBrains Mono",monospace;padding:3px 8px;border-radius:6px;background:var(--good-soft);color:var(--good-ink)}
+.who{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px}
+.who div{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:14px;font-size:13.5px;color:var(--fg2)}
+.who b{display:block;color:var(--fg)}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+.field{border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
+.field-k{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.field-k code{font-weight:600;background:var(--accent-soft);color:var(--accent-ink)}
+.field-v{font:500 12.5px "JetBrains Mono",monospace;color:var(--fg2);overflow-wrap:anywhere}
+.field p{margin:0;font-size:13px;color:var(--muted)}
+.split{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.split>*{flex:1 1 380px;min-width:0}
+
+/* stepper simulation */
+.sim{display:flex;flex-wrap:wrap;gap:20px}
+.steps{flex:1 1 300px;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.steps li{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:10px;border:1px solid var(--line2);transition:background .3s,border-color .3s}
+.steps .dot{flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--chip-bg);color:var(--muted);display:flex;align-items:center;justify-content:center;font:700 12px Inter;transition:all .3s}
+.steps li.run{border-color:var(--accent);background:var(--accent-soft)}
+.steps li.run .dot{background:var(--accent);color:#fff;animation:pulse 1s ease-in-out infinite}
+.steps li.done .dot{background:var(--good-soft);color:var(--good-ink)}
+.steps li b{display:block;font-size:14px}.steps li small{font:12px "JetBrains Mono",monospace;color:var(--muted)}
+@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(36,80,216,.2)}}
+.term{flex:2 1 380px;min-width:0;background:var(--code);border:1px solid var(--code-line);border-radius:12px;display:flex;flex-direction:column}
+.term-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--code-line);background:var(--code-head);color:#E6E9EF;font-size:13px;font-weight:600;border-radius:12px 12px 0 0}
+.term-b{padding:14px;font:12.5px/1.75 "JetBrains Mono",monospace;color:#C9CFDA;min-height:300px;max-height:360px;overflow:auto;white-space:pre-wrap}
+.term-b .lc{color:#8FB3FF}.term-b .lw{color:#F2C46B}.term-b .lok{color:#8EE0A8}
+.btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 18px;border-radius:8px;border:0;background:var(--accent);color:#fff;font:600 14px Inter,sans-serif;cursor:pointer}
+:root[data-theme="dark"] .btn{color:#0D1015}
+.btn.ghost{background:var(--surface);color:var(--fg);border:1px solid var(--line-strong)}
+.btn:disabled{opacity:.55;cursor:default}
+
+/* charts */
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.chart{border:1px solid var(--line);border-radius:var(--r);padding:18px;position:relative}
+.chart h4{margin:0 0 2px;font-size:15px}
+.chart .sub{font-size:12.5px;color:var(--muted);margin-bottom:12px}
+.bars{display:flex;flex-direction:column;gap:10px}
+.bar-row{display:grid;grid-template-columns:150px 1fr 56px;gap:10px;align-items:center;font-size:13px}
+.bar-row .lab{color:var(--fg2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-track{height:14px;position:relative}
+.bar-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--series-1);border-radius:0 4px 4px 0;transition:width 1s cubic-bezier(.2,.7,.2,1)}
+.bar-row .val{font:500 12px "JetBrains Mono",monospace;color:var(--fg2);text-align:right}
+.stack{display:flex;gap:2px;height:28px;margin:10px 0 14px}
+.stack div{height:100%;transition:flex-grow 1s cubic-bezier(.2,.7,.2,1);flex-grow:0;flex-basis:0}
+.stack div:first-child{border-radius:4px 0 0 4px}.stack div:last-child{border-radius:0 4px 4px 0}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:var(--fg2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+.tip{position:fixed;pointer-events:none;background:var(--fg);color:var(--bg);font-size:12.5px;padding:8px 10px;border-radius:8px;opacity:0;transition:opacity .12s;z-index:50;max-width:240px}
+.donut-wrap{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.donut-c{fill:var(--fg)}.donut-s{fill:var(--muted)}.donut-bg{stroke:var(--line2)}
+details.tv{margin-top:12px;font-size:13px}details.tv summary{cursor:pointer;color:var(--accent);font-weight:600}
+
+/* semver calc */
+.calc{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.calc label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.calc input{min-height:44px;padding:0 12px;border:1px solid var(--line-strong);border-radius:8px;font:500 15px "JetBrains Mono",monospace;width:150px;background:var(--surface);color:var(--fg)}
+.seg{display:flex;gap:6px}
+.seg button{min-height:44px;min-width:80px;border:1px solid var(--line-strong);background:var(--surface);border-radius:8px;font:600 13px "JetBrains Mono",monospace;cursor:pointer;color:var(--fg2)}
+.seg button[aria-checked="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+:root[data-theme="dark"] .seg button[aria-checked="true"]{color:#0D1015}
+.result{display:flex;flex-direction:column;gap:4px;min-width:220px}
+.result b{font:700 28px "JetBrains Mono",monospace;color:var(--accent)}
+.result span{font-size:13px;color:var(--fg2)}
+
+/* roadmap */
+.lanes{display:flex;flex-direction:column;gap:14px}
+.lane{display:grid;grid-template-columns:170px 1fr;gap:14px;align-items:start}
+.lane h4{margin:6px 0 0;font-size:14px}.lane small{color:var(--muted);font-size:12px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface);flex:1 1 260px;cursor:pointer;transition:border-color .2s,background .2s}
+.chip:hover{border-color:var(--accent-line)}
+.chip input{width:18px;height:18px;accent-color:var(--accent);margin-top:2px;flex-shrink:0}
+.chip b{font-size:14px;display:block}.chip span{font-size:12.5px;color:var(--muted)}
+.chip.done{background:var(--good-soft);border-color:transparent}
+.chip.done b{text-decoration:line-through;color:var(--muted)}
+.meter{display:flex;align-items:center;gap:12px;margin:0 0 16px;font-size:13px;color:var(--fg2)}
+.meter .track{flex:1;height:8px;background:var(--line2);border-radius:8px;overflow:hidden}
+.meter .track span{display:block;height:100%;width:0;background:var(--good);transition:width .4s}
+
+/* qa */
+.qa{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.q{border:1px dashed var(--warn-line);background:var(--warn-soft);border-radius:var(--r);padding:16px}
+.q b{display:block;margin-bottom:4px}
+.q span{font-size:13px;color:var(--warn-ink)}
+
+@media (max-width:860px){.toc{display:none}section.s{padding:22px}.hero{padding:26px}.lane{grid-template-columns:1fr}.bar-row{grid-template-columns:110px 1fr 50px}.ex-tree{border-right:0;border-bottom:1px solid var(--line)}.pipe-step{padding:0 0 14px}.pipe-step:not(:last-child)::after{right:auto;left:50%;top:auto;bottom:2px;transform:rotate(135deg)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}html{scroll-behavior:auto}}
+</style>
+<script>
+(function(){var t=null;try{t=localStorage.getItem('rp-theme')}catch(e){}
+if(!t){t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}
+document.documentElement.setAttribute('data-theme',t)})();
+</script>
+
+</head>
+<body>
+<a class="skip" href="#contenido">Saltar al contenido</a>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style="stroke:var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>
+      Release Panel · Plan técnico
+    </div>
+    <div class="progress" aria-hidden="true"><span id="readbar"></span></div>
+    <span class="pill">Nivel avanzado · para GitHub Copilot</span>
+    <button type="button" class="theme" id="themeBtn" aria-pressed="false" aria-label="Cambiar tema"><svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><span class="lbl">Oscuro</span></button>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="toc" aria-label="Contenido">
+    <ol id="toc">
+      <li><a href="#s1">Contexto y objetivo</a></li>
+      <li><a href="#s2">Restricciones</a></li>
+      <li><a href="#s3">Arquitectura</a></li>
+      <li><a href="#s4">Estructura del repo</a></li>
+      <li><a href="#s5">Contrato de scripts</a></li>
+      <li><a href="#s6">Artifactory</a></li>
+      <li><a href="#s7">Changesets y SemVer</a></li>
+      <li><a href="#s8">Flujo de release</a></li>
+      <li><a href="#s9">Wrapper brownfield</a></li>
+      <li><a href="#s10">API del backend</a></li>
+      <li><a href="#s11">Pantallas → componentes</a></li>
+      <li><a href="#s12">Errores y seguridad</a></li>
+      <li><a href="#s13">Roadmap de tareas</a></li>
+      <li><a href="#s14">Preparación Expo</a></li>
+      <li><a href="#s15">Preguntas abiertas</a></li>
+    </ol>
+  </nav>
+
+<main id="contenido">
+
+<!-- ========== HERO ========== -->
+<div class="hero rv">
+  <span class="eyebrow">Plan técnico · v1 · 2026-11-19</span>
+  <h1>Release Panel para librerías React Native</h1>
+  <p>Una aplicación web interna en Node.js que versiona librerías alojadas en Bitbucket, empuja el tag que dispara Jenkins (externo), confirma la publicación en Artifactory y actualiza el wrapper brownfield con un PR.</p>
+  <svg class="flow" viewBox="0 0 1000 190" role="img" aria-label="Flujo: Release Panel hace push de tag a Bitbucket, Jenkins publica en Artifactory, el panel consulta Artifactory y abre PR en el wrapper">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#5A6788"/></marker></defs>
+    <path id="p1" class="edge" d="M170 70 H250" marker-end="url(#ah)"/>
+    <path id="p2" class="edge" d="M420 70 H500" marker-end="url(#ah)"/>
+    <path id="p3" class="edge" d="M670 70 H750" marker-end="url(#ah)"/>
+    <path id="p4" class="edge" d="M835 100 V150 H95 V100" marker-end="url(#ah)"/>
+    <g class="node"><rect x="20" y="40" width="150" height="60" rx="12"/><text x="95" y="66" text-anchor="middle">Release Panel</text><text class="sub" x="95" y="86" text-anchor="middle">Node · scripts</text></g>
+    <g class="node"><rect x="250" y="40" width="170" height="60" rx="12"/><text x="335" y="66" text-anchor="middle">Bitbucket</text><text class="sub" x="335" y="86" text-anchor="middle">git push tag v*</text></g>
+    <g class="node ext"><rect x="500" y="40" width="170" height="60" rx="12"/><text x="585" y="66" text-anchor="middle">Jenkins</text><text class="sub" x="585" y="86" text-anchor="middle">externo · publish</text></g>
+    <g class="node"><rect x="750" y="40" width="170" height="60" rx="12"/><text x="835" y="66" text-anchor="middle">Artifactory</text><text class="sub" x="835" y="86" text-anchor="middle">npm registry</text></g>
+    <text x="465" y="172" text-anchor="middle" fill="#93A0B8" style="font:500 12px 'JetBrains Mono',monospace">polling npm view → rama + PR al wrapper brownfield</text>
+    <circle r="6" fill="#8FB3FF"><animateMotion dur="5s" repeatCount="indefinite" path="M95 70 H835 V150 H95 V70"/></circle>
+  </svg>
+  <div class="kpis">
+    <div class="kpi"><b>4</b><span>pantallas en el diseño</span></div>
+    <div class="kpi"><b>9</b><span>pasos por release</span></div>
+    <div class="kpi"><b>5</b><span>scripts en package.json</span></div>
+    <div class="kpi"><b>11</b><span>tareas para Copilot</span></div>
+  </div>
+</div>
+
+<div class="callout info rv" role="note">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="stroke:var(--accent)" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg>
+  <div><strong>Instrucciones para Copilot.</strong> Respeta las restricciones (§2): sin Vite, sin Yarn. Toda acción sobre un repo pasa SOLO por scripts de <code>package.json</code> (§5). Jenkins es externo: no se invoca ni se configura. Implementa en el orden del roadmap (§13). No inventes URLs ni nombres reales: usa variables de entorno y los placeholders <code>[ARTIFACTORY_URL]</code>, <code>[WORKSPACE]</code>, <code>@org/</code>. Lo marcado <span class="tag">CONFIRMAR</span> es un supuesto.</div>
+</div>
+
+<!-- ========== 1 ========== -->
+<section class="s rv" id="s1">
+  <span class="eyebrow">01 · Contexto</span>
+  <h2>Contexto y objetivo</h2>
+  <p class="lead">Varias librerías React Native viven cada una en su repo de Bitbucket y se publican como paquetes npm en Artifactory. Un repo adicional, el <strong>wrapper</strong>, las consume y empaqueta React Native como librería nativa para apps host existentes (patrón brownfield de Callstack).</p>
+  <div class="grid" style="margin-top:18px">
+    <div class="card"><div class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></div><h4>1 · Observar</h4><p>Versión en <code>main</code>, última en Artifactory, la que usa el wrapper y changesets pendientes.</p></div>
+    <div class="card"><div class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></div><h4>2 · Versionar</h4><p>Changesets → commit → tag → push. El tag dispara Jenkins.</p></div>
+    <div class="card"><div class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><h4>3 · Confirmar</h4><p>Polling hasta que la versión exista en Artifactory.</p></div>
+    <div class="card"><div class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v8M18 16V9a3 3 0 0 0-3-3h-4"/></svg></div><h4>4 · Integrar</h4><p>Rama en el wrapper con dependencias nuevas y PR en Bitbucket.</p></div>
+  </div>
+  <div class="callout warn" role="note"><strong style="white-space:nowrap">Analogía:</strong><span>el panel es la torre de control. No pilotea el avión (Jenkins) ni construye la pista (Artifactory): autoriza el despegue (tag), mira el radar (polling) y coordina el aterrizaje en el aeropuerto destino (wrapper).</span></div>
+</section>
+
+<!-- ========== 2 ========== -->
+<section class="s rv" id="s2">
+  <span class="eyebrow">02 · Restricciones</span>
+  <h2>Restricciones del proyecto</h2>
+  <p class="lead">Decisiones no negociables. Copilot no debe proponer alternativas fuera de esta tabla.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Tema</th><th>Decisión</th><th>Motivo</th></tr></thead>
+    <tbody>
+      <tr><td>Runtime</td><td>Node.js LTS, fijado por <code>.nvmrc</code></td><td>Mismo runtime que las librerías</td></tr>
+      <tr><td>Gestores</td><td><code>pnpm</code> y <code>npm</code> conviven; se detecta por lockfile</td><td>Repos existentes usan ambos</td></tr>
+      <tr><td>Bundler del panel</td><td>Sin Vite. Frontend con webpack 5</td><td>Requisito del equipo</td></tr>
+      <tr><td>Librerías</td><td>React Native CLI + <code>react-native-builder-bob</code></td><td>Estándar de Callstack para librerías RN</td></tr>
+      <tr><td>CI/CD</td><td>Jenkins externo, disparado por tag <code>v*</code></td><td>No lo controlamos</td></tr>
+      <tr><td>Versionado</td><td>SemVer + Changesets</td><td>Changelog y bump reproducibles</td></tr>
+      <tr><td>Git hosting</td><td>Bitbucket <span class="tag">CONFIRMAR Cloud o Data Center</span></td><td>Cambia la API de PR</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Detección del gestor</h3>
+  <pre><code>// server/src/lib/detect-pm.mjs
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+export function detectPackageManager(repoDir) {
+  if (existsSync(join(repoDir, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (existsSync(join(repoDir, 'package-lock.json'))) return 'npm';
+  throw new Error(`Sin lockfile reconocido en ${repoDir}`);
+}
+
+export const installCmd = (pm) =&gt;
+  pm === 'pnpm' ? ['pnpm', ['install', '--frozen-lockfile']] : ['npm', ['ci']];
+
+// Windows: npm/pnpm son .cmd
+export const bin = (name) =&gt; (process.platform === 'win32' ? `${name}.cmd` : name);</code></pre>
+</section>
+
+<!-- ========== 3 ========== -->
+<section class="s rv" id="s3">
+  <span class="eyebrow">03 · Arquitectura</span>
+  <h2>Arquitectura</h2>
+  <p class="lead">El servidor trabaja siempre en <strong>clones temporales</strong> (<code>/tmp/release-panel/&lt;jobId&gt;/&lt;repo&gt;</code>), nunca en la copia de trabajo del desarrollador. Un lock por repo impide dos releases simultáneos de la misma librería.</p>
+  <svg class="dg" viewBox="0 0 900 330" role="img" aria-label="Diagrama de arquitectura: Web React habla por REST y SSE con el servidor Node; el servidor usa git contra Bitbucket y npm view contra Artifactory; Jenkins externo publica en Artifactory" style="width:100%;height:auto;margin-top:12px">
+    <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0 0L10 5L0 10z"/></marker></defs>
+    <rect class="box-soft" x="20" y="30" width="200" height="90" rx="12"/>
+    <text class="t1" x="120" y="66" text-anchor="middle">Web (React)</text><text class="t2" x="120" y="88" text-anchor="middle">webpack 5 · TS</text>
+    <rect class="box-main" x="340" y="20" width="240" height="120" rx="12"/>
+    <text class="t1" x="460" y="52" text-anchor="middle">Server Node (Express)</text>
+    <text class="t2" x="460" y="76" text-anchor="middle">cola de jobs · lock por repo</text>
+    <text class="t2" x="460" y="96" text-anchor="middle">spawn git / npm / pnpm</text>
+    <text class="t2" x="460" y="116" text-anchor="middle">SSE de logs</text>
+    <rect class="box" x="200" y="220" width="220" height="80" rx="12"/>
+    <text class="t1" x="310" y="254" text-anchor="middle">Bitbucket</text><text class="t2" x="310" y="276" text-anchor="middle">repos libs + wrapper</text>
+    <rect class="box" x="660" y="220" width="220" height="80" rx="12"/>
+    <text class="t1" x="770" y="254" text-anchor="middle">Artifactory</text><text class="t2" x="770" y="276" text-anchor="middle">npm registry</text>
+    <rect class="box-ext" x="440" y="230" width="190" height="60" rx="12"/>
+    <text class="t1 tw" x="535" y="258" text-anchor="middle" style="font-size:14px">Jenkins (externo)</text><text class="t3 tw" x="535" y="277" text-anchor="middle">no controlado</text>
+    <path class="edge2" d="M220 75 H336" marker-end="url(#a2)"/>
+    <path class="edge2" d="M420 140 L330 216" marker-end="url(#a2)"/>
+    <path class="edge2" d="M520 140 L740 216" marker-end="url(#a2)"/>
+    <path class="edge2" d="M420 260 H436" marker-end="url(#a2)"/>
+    <path class="edge2" d="M630 260 H656" marker-end="url(#a2)"/>
+    <text class="t3" x="278" y="66" text-anchor="middle">REST + SSE</text>
+    <text class="t3" x="345" y="186">git clone / push</text>
+    <text class="t3" x="640" y="186">npm view</text>
+    <text class="t3" x="424" y="250" style="font-size:10px">tag</text>
+    <text class="t3" x="633" y="250" style="font-size:10px">publish</text>
+  </svg>
+</section>
+
+<!-- ========== 4 ========== -->
+<section class="s rv" id="s4">
+  <span class="eyebrow">04 · Estructura</span>
+  <h2>Estructura del repo del panel</h2>
+  <p class="lead">Explora el árbol: cada archivo indica su responsabilidad, qué pantalla o paso lo usa y de qué depende. Monorepo pnpm con dos paquetes: <code>server</code> y <code>web</code>.</p>
+
+  <div class="explorer">
+    <nav class="ex-tree" aria-label="Árbol de archivos" id="exTree"></nav>
+    <div class="ex-detail" id="exDetail" aria-live="polite"></div>
+  </div>
+  <div class="legend-row" aria-label="Leyenda de tipos">
+    <span><svg class="fi" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#E8B03A"/></svg>carpeta</span>
+    <span><i class="sw" style="background:#E8B03A"></i>.mjs servidor</span>
+    <span><i class="sw" style="background:#3987e5"></i>.tsx web</span>
+    <span><i class="sw" style="background:#3FB27F"></i>.json config</span>
+    <span><i class="sw" style="background:#9AA3B3"></i>env / otros</span>
+  </div>
+
+  <h3>Archivos de configuración</h3>
+  <div class="tabs" data-tabs>
+    <div class="tablist" role="tablist" aria-label="Archivos de configuración">
+      <button role="tab" aria-selected="true">libraries.config.json</button>
+      <button role="tab" aria-selected="false">.env.example</button>
+      <button role="tab" aria-selected="false">pnpm-workspace.yaml</button>
+      <button role="tab" aria-selected="false">package.json (raíz)</button>
+    </div>
+    <div class="panel" role="tabpanel"><pre data-file="libraries.config.json" data-lang="json"><code>{
+  "registry": "${ARTIFACTORY_NPM_URL}",
+  "bitbucket": { "workspace": "${BB_WORKSPACE}", "mainBranch": "main" },
+  "wrapper": { "repo": "org-rn-brownfield-wrapper" },
+  "libraries": [
+    { "name": "@org/rn-design-system", "repo": "rn-design-system" },
+    { "name": "@org/rn-auth", "repo": "rn-auth" }
+  ]
+}</code></pre></div>
+    <div class="panel" role="tabpanel" hidden><pre data-file=".env.example" data-lang="env"><code># Servidor
+PORT=4310
+# Artifactory (npm)
+ARTIFACTORY_NPM_URL=https://[ARTIFACTORY_HOST]/artifactory/api/npm/[NPM_REPO]/
+ARTIFACTORY_TOKEN=
+# Bitbucket
+BB_WORKSPACE=[WORKSPACE]
+BB_TOKEN=
+# Identidad de los commits del bot
+GIT_AUTHOR_NAME=Release Panel
+GIT_AUTHOR_EMAIL=[EMAIL_BOT]
+# Polling a Artifactory
+POLL_INTERVAL_MS=30000
+POLL_ATTEMPTS=40</code></pre></div>
+    <div class="panel" role="tabpanel" hidden><pre data-file="pnpm-workspace.yaml" data-lang="yaml"><code>packages:
+  - "server"
+  - "web"</code></pre></div>
+    <div class="panel" role="tabpanel" hidden><pre data-file="package.json" data-lang="json"><code>{
+  "name": "release-panel",
+  "private": true,
+  "packageManager": "pnpm@[PNPM_VERSION]",
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test"
+  }
+}</code></pre></div>
+  </div>
+
+  <details class="tv" style="margin-top:16px"><summary>Versión texto del árbol (para Copilot)</summary>
+  <pre data-file="estructura.txt" data-lang="tree"><code>release-panel/
+├─ package.json              # scripts raíz: dev, build, test
+├─ pnpm-workspace.yaml       # packages: [server, web]
+├─ .nvmrc
+├─ .env.example
+├─ libraries.config.json     # catálogo de librerías y wrapper
+├─ templates/library/        # scripts y config para copiar a cada lib
+├─ server/
+│  └─ src/
+│     ├─ index.mjs           # Express, rutas, SSE
+│     ├─ jobs/queue.mjs      # cola en memoria + lock por repo
+│     ├─ jobs/release.mjs    # orquesta pasos 1–9
+│     ├─ jobs/wrapper.mjs    # sync wrapper + PR
+│     ├─ lib/run.mjs         # spawn con streaming y enmascarado
+│     ├─ lib/detect-pm.mjs   # pnpm vs npm por lockfile
+│     ├─ lib/artifactory.mjs # npm view + polling
+│     └─ lib/bitbucket.mjs   # API de PR
+└─ web/
+   ├─ webpack.config.cjs
+   └─ src/pages/
+      ├─ Libraries.tsx       # pantalla 1
+      ├─ Release.tsx         # pantalla 2 (wizard)
+      ├─ Job.tsx             # pantalla 3 (logs)
+      └─ Wrapper.tsx         # pantalla 4</code></pre>
+  </details>
+</section>
+
+<!-- ========== 5 ========== -->
+<section class="s rv" id="s5">
+  <span class="eyebrow">05 · Contrato</span>
+  <h2>Contrato de scripts por librería</h2>
+  <p class="lead">El panel solo ejecuta <code>&lt;pm&gt; run &lt;script&gt;</code>. Cada repo puede cambiar cómo implementa un script sin tocar el panel: es inversión de dependencias aplicada a la CI. Haz clic en un script para resaltarlo en el <code>package.json</code>.</p>
+
+  <h3>Ciclo de vida</h3>
+  <div class="pipe" id="pipe">
+    <div class="pipe-step">
+      <button type="button" class="sc" data-script="release:check" aria-pressed="false">
+        <div class="sc-top"><span class="sc-num">01 · LEE</span><span class="tag green">sin efectos</span></div>
+        <span class="sc-name">release:check</span>
+        <div class="sc-cmd">node scripts/check-versions.mjs</div>
+        <p>Compara versión del repo vs Artifactory y cuenta changesets. Alimenta el Dashboard.</p>
+      </button>
+    </div>
+    <div class="pipe-step">
+      <button type="button" class="sc" data-script="release:bump" aria-pressed="false">
+        <div class="sc-top"><span class="sc-num">02 · ESCRIBE</span><span class="tag blue">local</span></div>
+        <span class="sc-name">release:bump</span>
+        <div class="sc-cmd">changeset version</div>
+        <p>Consume <code>.changeset/*.md</code>, sube <code>version</code> y escribe <code>CHANGELOG.md</code>.</p>
+      </button>
+    </div>
+    <div class="pipe-step">
+      <button type="button" class="sc" data-script="release:verify" aria-pressed="false">
+        <div class="sc-top"><span class="sc-num">03 · VALIDA</span><span class="tag blue">local</span></div>
+        <span class="sc-name">release:verify</span>
+        <div class="sub-chips" aria-label="Sub-scripts"><span>lint</span><span>typecheck</span><span>test</span><span>build (bob)</span></div>
+        <p>Si algo falla aquí, no se crea tag. Es la última puerta segura.</p>
+      </button>
+    </div>
+    <div class="pipe-step">
+      <button type="button" class="sc pnr" data-script="release:tag" aria-pressed="false">
+        <div class="sc-top"><span class="sc-num">04 · PUBLICA</span><span class="tag">no retorno</span></div>
+        <span class="sc-name">release:tag</span>
+        <div class="sc-cmd">node scripts/tag-and-push.mjs</div>
+        <p>Commit + tag <code>v&lt;version&gt;</code> + push. Jenkins toma el control.</p>
+      </button>
+    </div>
+  </div>
+
+  <div class="who">
+    <div><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span><span><b>Desarrollador · en su PR</b><code>changeset</code> → crea <code>.changeset/*.md</code> con el bump y la descripción.</span></div>
+    <div><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8"/></svg></span><span><b>Release Panel</b>Ejecuta 01 → 04 en un clon temporal con el gestor detectado.</span></div>
+    <div><span class="ico" style="background:var(--warn-soft);color:var(--warn-ink)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 2v6M12 16v6M4.9 4.9l4.2 4.2M14.9 14.9l4.2 4.2M2 12h6M16 12h6"/></svg></span><span><b>Jenkins (externo)</b>Reacciona al tag y publica en Artifactory. Fuera de este contrato.</span></div>
+  </div>
+
+  <h3>package.json de la librería</h3>
+  <div class="tabs" data-tabs>
+    <div class="tablist" role="tablist" aria-label="package.json de la librería">
+      <button role="tab" aria-selected="true">scripts</button>
+      <button role="tab" aria-selected="false">campos de build</button>
+      <button role="tab" aria-selected="false">variante pnpm</button>
+    </div>
+    <div class="panel" role="tabpanel"><pre data-file="package.json · scripts" data-lang="json" id="pkgScripts"><code>{
+  "name": "@org/rn-auth",
+  "version": "5.1.3",
+  "scripts": {
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "test": "jest",
+    "typecheck": "tsc --noEmit",
+    "build": "bob build",
+    "changeset": "changeset",
+    "release:check": "node scripts/check-versions.mjs",
+    "release:bump": "changeset version",
+    "release:verify": "npm run lint &amp;&amp; npm run typecheck &amp;&amp; npm test &amp;&amp; npm run build",
+    "release:tag": "node scripts/tag-and-push.mjs"
+  }
+}</code></pre></div>
+    <div class="panel" role="tabpanel" hidden><pre data-file="package.json · build" data-lang="json"><code>{
+  "main": "lib/commonjs/index.js",
+  "module": "lib/module/index.js",
+  "types": "lib/typescript/src/index.d.ts",
+  "react-native": "src/index.tsx",
+  "source": "src/index.tsx",
+  "files": ["src", "lib", "android", "ios", "*.podspec", "!**/__tests__"],
+  "peerDependencies": { "react": "*", "react-native": "&gt;=0.76" },
+  "publishConfig": { "registry": "[ARTIFACTORY_NPM_URL]" },
+  "react-native-builder-bob": {
+    "source": "src",
+    "output": "lib",
+    "targets": ["commonjs", "module", ["typescript", { "project": "tsconfig.build.json" }]]
+  }
+}</code></pre></div>
+    <div class="panel" role="tabpanel" hidden><pre data-file="package.json · repo pnpm" data-lang="json"><code>{
+  "scripts": {
+    "release:verify": "pnpm lint &amp;&amp; pnpm typecheck &amp;&amp; pnpm test &amp;&amp; pnpm build"
+  }
+}
+// El resto de scripts es idéntico: el panel solo cambia `npm run` por `pnpm run`.</code></pre></div>
+  </div>
+
+  <h3>Campos clave y por qué</h3>
+  <div class="fields">
+    <div class="field"><div class="field-k"><code>main</code><code>module</code><code>types</code></div><div class="field-v">lib/commonjs · lib/module · lib/typescript</div><p>Salidas de <code>bob build</code>: CommonJS para Jest/Node, ESM para Metro, tipos para el wrapper.</p></div>
+    <div class="field"><div class="field-k"><code>react-native</code><code>source</code></div><div class="field-v">src/index.tsx</div><p>Metro puede resolver el código fuente directo; útil para depurar desde el wrapper.</p></div>
+    <div class="field"><div class="field-k"><code>files</code></div><div class="field-v">src, lib, android, ios, *.podspec</div><p>Solo lo necesario viaja al paquete; los tests quedan fuera.</p></div>
+    <div class="field"><div class="field-k"><code>peerDependencies</code><span class="tag">ejemplo</span></div><div class="field-v">react-native &gt;=0.76</div><p>El wrapper aporta react y react-native; el panel valida este rango antes del PR.</p></div>
+    <div class="field"><div class="field-k"><code>publishConfig.registry</code></div><div class="field-v">[ARTIFACTORY_NPM_URL]</div><p>Candado: evita publicar por error en npmjs.org aunque falte el <code>.npmrc</code>.</p></div>
+    <div class="field"><div class="field-k"><code>react-native-builder-bob</code></div><div class="field-v">targets: commonjs, module, typescript</div><p>Herramienta de Callstack para compilar librerías RN de forma estándar.</p></div>
+  </div>
+</section>
+
+<!-- ========== 6 ========== -->
+<section class="s rv" id="s6">
+  <span class="eyebrow">06 · Registry</span>
+  <h2>Artifactory</h2>
+  <div class="tabs" data-tabs>
+    <div class="tablist" role="tablist" aria-label="Artifactory">
+      <button role="tab" aria-selected="true">.npmrc</button>
+      <button role="tab" aria-selected="false">lib/artifactory.mjs</button>
+    </div>
+    <div class="panel" role="tabpanel"><pre><code>@org:registry=https://[ARTIFACTORY_HOST]/artifactory/api/npm/[NPM_REPO]/
+//[ARTIFACTORY_HOST]/artifactory/api/npm/[NPM_REPO]/:_authToken=${ARTIFACTORY_TOKEN}
+always-auth=true</code></pre></div>
+    <div class="panel" role="tabpanel" hidden><pre><code>import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+const run = promisify(execFile);
+
+export async function latestVersion(pkg, registry) {
+  const { stdout } = await run('npm', ['view', pkg, 'dist-tags', '--json', '--registry', registry]);
+  return JSON.parse(stdout).latest ?? null;
+}
+
+export async function versionExists(pkg, version, registry) {
+  try {
+    const { stdout } = await run('npm', ['view', `${pkg}@${version}`, 'version', '--registry', registry]);
+    return stdout.trim() === version;
+  } catch { return false; }   // E404 = aún no publicada
+}
+
+export async function waitForVersion(pkg, version, registry,
+  { intervalMs = 30000, attempts = 40, onTick } = {}) {
+  for (let i = 1; i &lt;= attempts; i++) {
+    onTick?.(i, attempts);
+    if (await versionExists(pkg, version, registry)) return true;
+    await new Promise((r) =&gt; setTimeout(r, intervalMs));
+  }
+  return false; // timeout → estado "Revisar Jenkins"
+}</code></pre></div>
+  </div>
+  <p class="muted" style="margin-top:12px">El token vive en variables de entorno del servidor, nunca en el repo. <span class="tag">CONFIRMAR token vs usuario + API key</span></p>
+</section>
+
+<!-- ========== 7 ========== -->
+<section class="s rv" id="s7">
+  <span class="eyebrow">07 · Versionado</span>
+  <h2>Changesets y SemVer</h2>
+  <p class="lead">El desarrollador corre <code>pnpm changeset</code> (o <code>npx changeset</code>) en su PR y elige el bump. El panel lee <code>.changeset/*.md</code> para sugerirlo y puede forzarlo antes de <code>changeset version</code>.</p>
+
+  <h3>Calculadora SemVer (misma regla que usará la UI y el servidor)</h3>
+  <div class="calc">
+    <label for="cv">Versión publicada<input id="cv" value="5.1.3" inputmode="decimal" autocomplete="off"></label>
+    <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)">Bump
+      <div class="seg" role="radiogroup" aria-label="Tipo de bump" id="seg">
+        <button type="button" role="radio" aria-checked="false" data-b="patch">patch</button>
+        <button type="button" role="radio" aria-checked="true" data-b="minor">minor</button>
+        <button type="button" role="radio" aria-checked="false" data-b="major">major</button>
+      </div>
+    </div>
+    <div class="result" aria-live="polite"><span>Siguiente versión</span><b id="nv">5.2.0</b><span id="nr">Rango en wrapper: <code>^5.2.0</code></span></div>
+  </div>
+
+  <div class="tbl" style="margin-top:16px"><table>
+    <thead><tr><th>Bump</th><th>Cuándo</th><th>Rango en wrapper</th></tr></thead>
+    <tbody>
+      <tr><td><code>patch</code></td><td>Fix sin cambio de API</td><td><code>^x.y.z</code></td></tr>
+      <tr><td><code>minor</code></td><td>API nueva compatible</td><td><code>^x.y.z</code></td></tr>
+      <tr><td><code>major</code></td><td>Rompe API o sube el peer de react-native</td><td>Revisión manual; excluido por defecto</td></tr>
+      <tr><td><code>0.x</code></td><td>Un minor puede romper</td><td><code>~0.y.z</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Archivos</h3>
+  <div class="tabs" data-tabs>
+    <div class="tablist" role="tablist" aria-label="Changesets">
+      <button role="tab" aria-selected="true">.changeset/config.json</button>
+      <button role="tab" aria-selected="false">.changeset/ejemplo.md</button>
+    </div>
+    <div class="panel" role="tabpanel"><pre><code>{
+  "$schema": "https://unpkg.com/@changesets/config/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "access": "restricted",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": []
+}</code></pre></div>
+    <div class="panel" role="tabpanel" hidden><pre><code>---
+"@org/rn-auth": minor
+---
+
+Añade refreshToken silencioso en AuthProvider</code></pre></div>
+  </div>
+</section>
+
+<!-- ========== 8 ========== -->
+<section class="s rv" id="s8">
+  <span class="eyebrow">08 · Orquestación</span>
+  <h2>Flujo de release, paso a paso</h2>
+  <p class="lead">Pulsa <strong>Simular release</strong> para ver el orden de ejecución. El <strong>punto de no retorno</strong> es el push del tag: antes todo se aborta sin efectos.</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px">
+    <button class="btn" type="button" id="simGo">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Simular release
+    </button>
+    <button class="btn ghost" type="button" id="simReset">Reiniciar</button>
+  </div>
+  <div class="sim">
+    <ol class="steps" id="steps"></ol>
+    <div class="term" aria-label="Log simulado">
+      <div class="term-h"><span>Log · REL-2026.11.19-01</span><span class="mono" id="simState" style="font-weight:500;color:#93A0B8">en espera</span></div>
+      <div class="term-b" id="log" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <h3>Tabla de pasos</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>#</th><th>Paso</th><th>Comando</th><th>Si falla</th></tr></thead>
+    <tbody id="stepTable"></tbody>
+  </table></div>
+
+  <div class="charts" style="margin-top:20px">
+    <div class="chart">
+      <h4>Duración por etapa</h4>
+      <div class="sub">Segundos · datos de ejemplo del log del diseño (pantalla 3)</div>
+      <div class="bars" id="durBars"></div>
+      <details class="tv"><summary>Ver como tabla</summary><div class="tbl" style="margin-top:8px"><table style="min-width:0"><thead><tr><th>Etapa</th><th>Segundos</th></tr></thead><tbody id="durTable"></tbody></table></div></details>
+    </div>
+    <div class="chart">
+      <h4>¿Dónde se va el tiempo?</h4>
+      <div class="sub">Mismo ejemplo: lo que controla el panel vs. lo que espera de Jenkins</div>
+      <div class="donut-wrap">
+        <svg id="donut" width="170" height="170" viewBox="0 0 42 42" role="img" aria-label="Proporción de tiempo: trabajo local del panel frente a espera de Jenkins y Artifactory"></svg>
+        <div class="legend" style="flex-direction:column" id="donutLegend"></div>
+      </div>
+      <p class="muted" style="font-size:13px;margin-top:10px">Lectura: optimizar el panel tiene techo; la espera depende del pipeline externo. Por eso el polling tiene timeout y estado propio.</p>
+    </div>
+  </div>
+
+  <h3>Scripts de release</h3>
+  <div class="tabs" data-tabs>
+    <div class="tablist" role="tablist" aria-label="Scripts de release">
+      <button role="tab" aria-selected="true">tag-and-push.mjs</button>
+      <button role="tab" aria-selected="false">check-versions.mjs</button>
+      <button role="tab" aria-selected="false">server/lib/run.mjs</button>
+    </div>
+    <div class="panel" role="tabpanel"><pre><code>#!/usr/bin/env node
+// Crea commit de release + tag anotado y hace push. El tag dispara Jenkins.
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+
+const sh = (cmd, args) =&gt; execFileSync(cmd, args, { stdio: 'pipe' }).toString().trim();
+const { name, version } = JSON.parse(readFileSync('package.json', 'utf8'));
+const tag = `v${version}`;
+
+if (sh('git', ['rev-parse', '--abbrev-ref', 'HEAD']) !== 'main') {
+  throw new Error('Solo se publica desde main');
+}
+if (sh('git', ['ls-remote', '--tags', 'origin', tag])) {
+  throw new Error(`El tag ${tag} ya existe en origin`);
+}
+
+sh('git', ['add', '-A']);
+sh('git', ['commit', '-m', `chore(release): ${name}@${version}`]);
+sh('git', ['tag', '-a', tag, '-m', `${name}@${version}`]);
+sh('git', ['push', 'origin', 'main', '--follow-tags']);
+
+// Última línea en JSON para que el servidor la parsee
+console.log(JSON.stringify({ name, version, tag, commit: sh('git', ['rev-parse', '--short', 'HEAD']) }));</code></pre></div>
+    <div class="panel" role="tabpanel" hidden><pre><code>#!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
+import { readFileSync, readdirSync } from 'node:fs';
+
+const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+const registry = pkg.publishConfig?.registry;
+let published = null;
+try {
+  published = JSON.parse(
+    execFileSync('npm', ['view', pkg.name, 'dist-tags', '--json', '--registry', registry]).toString()
+  ).latest;
+} catch { /* nunca publicada */ }
+
+const pending = readdirSync('.changeset').filter((f) =&gt; f.endsWith('.md') &amp;&amp; f !== 'README.md');
+console.log(JSON.stringify({ name: pkg.name, repoVersion: pkg.version, published, pendingChangesets: pending.length }));</code></pre></div>
+    <div class="panel" role="tabpanel" hidden><pre><code>import { spawn } from 'node:child_process';
+
+const SECRETS = [process.env.ARTIFACTORY_TOKEN, process.env.BB_TOKEN].filter(Boolean);
+const mask = (s) =&gt; SECRETS.reduce((acc, t) =&gt; acc.split(t).join('***'), s);
+
+export function run(cmd, args, { cwd, onLine }) {
+  return new Promise((resolve, reject) =&gt; {
+    onLine?.(`$ ${cmd} ${args.join(' ')}`);
+    const p = spawn(cmd, args, { cwd, env: process.env, shell: false });
+    let last = '';
+    const handle = (buf) =&gt; buf.toString().split('\n').filter(Boolean)
+      .forEach((l) =&gt; { last = l; onLine?.(mask(l)); });
+    p.stdout.on('data', handle);
+    p.stderr.on('data', handle);
+    p.on('close', (code) =&gt; (code === 0 ? resolve(last) : reject(new Error(`${cmd} salió con ${code}`))));
+  });
+}</code></pre></div>
+  </div>
+  <p class="muted" style="margin-top:12px"><span class="tag">CONFIRMAR</span> formato de tag que escucha Jenkins (<code>v1.2.3</code> vs <code>@org/rn-auth@1.2.3</code>) y si Jenkins corre <code>npm publish</code> o <code>changeset publish</code>.</p>
+</section>
+
+<!-- ========== 9 ========== -->
+<section class="s rv" id="s9">
+  <span class="eyebrow">09 · Brownfield</span>
+  <h2>Wrapper brownfield (Callstack)</h2>
+  <p class="lead">El wrapper agrega las librerías como dependencias y usa <code>@callstack/react-native-brownfield</code> para exponer React Native a apps nativas existentes; se distribuye como AAR (Android) y XCFramework (iOS). <span class="tag">CONFIRMAR versión y si se usan otras herramientas de Callstack para empaquetar</span></p>
+
+  <div class="chart" style="margin:16px 0">
+    <h4>Estado de las librerías frente al wrapper</h4>
+    <div class="sub">6 librerías · datos de ejemplo del dashboard del diseño</div>
+    <div class="stack" id="stack" role="img" aria-label="Distribución de estados: 1 al día, 2 pendientes de publicar, 2 wrapper desactualizado, 1 major por revisar"></div>
+    <div class="legend" id="stackLegend"></div>
+    <details class="tv"><summary>Ver como tabla</summary><div class="tbl" style="margin-top:8px"><table style="min-width:0"><thead><tr><th>Estado</th><th>Librerías</th></tr></thead><tbody id="stackTable"></tbody></table></div></details>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h4>✓ Existe en Artifactory</h4><p>Cada <code>pkg@version</code> pasa <code>versionExists()</code> antes de abrir el PR.</p></div>
+    <div class="card"><h4>✓ peer de react-native</h4><p><code>semver.satisfies(rnDelWrapper, peer)</code> para cada librería.</p></div>
+    <div class="card"><h4>✓ Autolinking</h4><p><code>npx react-native config</code> corre sin errores en la rama.</p></div>
+    <div class="card"><h4>! Majors</h4><p>Excluidos por defecto; requieren confirmación explícita en la UI.</p></div>
+    <div class="card"><h4>pnpm hoisted</h4><p>El wrapper usa <code>node-linker=hoisted</code> porque las herramientas nativas de RN esperan <code>node_modules</code> plano. <span class="tag">CONFIRMAR</span></p></div>
+  </div>
+
+  <h3>Código</h3>
+  <div class="tabs" data-tabs>
+    <div class="tablist" role="tablist" aria-label="Wrapper">
+      <button role="tab" aria-selected="true">scripts/sync-wrapper.mjs</button>
+      <button role="tab" aria-selected="false">lib/bitbucket.mjs</button>
+    </div>
+    <div class="panel" role="tabpanel"><pre><code>#!/usr/bin/env node
+// Uso: node scripts/sync-wrapper.mjs @org/rn-auth@5.2.0 @org/rn-analytics@1.9.2
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+
+const sh = (c, a) =&gt; execFileSync(c, a, { stdio: 'inherit' });
+const pm = existsSync('pnpm-lock.yaml') ? 'pnpm' : 'npm';
+const specs = process.argv.slice(2);
+if (!specs.length) throw new Error('Indica paquetes pkg@version');
+
+const range = (spec) =&gt; {
+  const at = spec.lastIndexOf('@');
+  const name = spec.slice(0, at), v = spec.slice(at + 1);
+  return `${name}@${v.startsWith('0.') ? '~' : '^'}${v}`;
+};
+
+const branch = `release/libs-${new Date().toISOString().slice(0, 10)}`;
+sh('git', ['checkout', '-b', branch]);
+const args = specs.map(range);
+pm === 'pnpm' ? sh('pnpm', ['add', ...args]) : sh('npm', ['install', ...args]);
+sh('git', ['add', 'package.json', pm === 'pnpm' ? 'pnpm-lock.yaml' : 'package-lock.json']);
+sh('git', ['commit', '-m', `chore(deps): ${specs.join(', ')}`]);
+sh('git', ['push', '-u', 'origin', branch]);
+console.log(JSON.stringify({ branch, specs }));</code></pre></div>
+    <div class="panel" role="tabpanel" hidden><pre><code>// Bitbucket Cloud — API 2.0
+export async function openPullRequest({ workspace, repo, branch, title, description }) {
+  const res = await fetch(`https://api.bitbucket.org/2.0/repositories/${workspace}/${repo}/pullrequests`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.BB_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title, description,
+      source: { branch: { name: branch } },
+      destination: { branch: { name: 'main' } },
+      close_source_branch: true
+    })
+  });
+  if (!res.ok) throw new Error(`Bitbucket ${res.status}: ${await res.text()}`);
+  return res.json(); // .id, .links.html.href
+}
+// Bitbucket Data Center: POST /rest/api/1.0/projects/{key}/repos/{slug}/pull-requests
+// con fromRef / toRef. Implementar según la respuesta CONFIRMAR de §2.</code></pre></div>
+  </div>
+</section>
+
+<!-- ========== 10 ========== -->
+<section class="s rv" id="s10">
+  <span class="eyebrow">10 · API</span>
+  <h2>API del backend del panel</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Método</th><th>Ruta</th><th>Descripción</th><th>Pantalla</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/libraries</code></td><td>Estado de todas las libs (cache 60 s)</td><td>1</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/libraries/refresh</code></td><td>Fuerza verificación contra Artifactory y Bitbucket</td><td>1</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/libraries/:name/changesets</code></td><td>Changesets pendientes y bump sugerido</td><td>2</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/releases</code></td><td>Crea job: <code>{ items:[{name, bump}], syncWrapper }</code></td><td>2</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/jobs/:id</code></td><td>Estado y pasos del job</td><td>3</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/jobs/:id/stream</code></td><td>SSE: líneas de log y cambios de paso</td><td>3</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/jobs/:id/cancel</code></td><td>Cancela espera (no revierte tags ya empujados)</td><td>3</td></tr>
+      <tr><td><span class="m get">GET</span></td><td><code>/api/wrapper</code></td><td>Deps actuales vs destino y compatibilidad</td><td>4</td></tr>
+      <tr><td><span class="m post">POST</span></td><td><code>/api/wrapper/sync</code></td><td><code>{ specs:["@org/x@1.2.3"] }</code> → rama + PR</td><td>4</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Tipos compartidos</h3>
+  <pre><code>type PackageManager = 'pnpm' | 'npm';
+type Bump = 'patch' | 'minor' | 'major';
+type LibStatus = 'up-to-date' | 'pending-publish' | 'wrapper-outdated' | 'major-review';
+
+interface LibraryState {
+  name: string; repo: string; pm: PackageManager;
+  repoVersion: string; published: string | null; wrapperVersion: string | null;
+  pendingChangesets: number; suggestedBump: Bump | null; status: LibStatus;
+}
+
+type StepKey = 'clone' | 'preflight' | 'install' | 'bump' | 'verify' | 'tag'
+             | 'jenkins' | 'artifactory' | 'wrapper';
+type StepState = 'pending' | 'running' | 'done' | 'failed' | 'external' | 'timeout';
+
+interface Job {
+  id: string;                 // REL-YYYY.MM.DD-NN
+  items: { name: string; from: string; to: string; bump: Bump }[];
+  steps: { key: StepKey; state: StepState; startedAt?: string; endedAt?: string }[];
+  createdBy: string; createdAt: string;
+  result?: { tag?: string; commit?: string; prUrl?: string };
+}
+
+type JobEvent =               // SSE
+  | { type: 'log'; line: string; ts: string }
+  | { type: 'step'; key: StepKey; state: StepState }
+  | { type: 'done'; result: Job['result'] };</code></pre>
+  <h3>Máquina de estados de un paso</h3>
+  <svg class="dg" viewBox="0 0 820 150" role="img" aria-label="Estados de un paso: pending pasa a running; running pasa a done, failed, external o timeout" style="width:100%;height:auto">
+    <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0 0L10 5L0 10z"/></marker></defs>
+    <g style="font-family:'JetBrains Mono',monospace;font-size:13px" text-anchor="middle">
+      <rect class="st-p" x="10" y="55" width="120" height="40" rx="20"/><text class="tx-p" x="70" y="80" style="font-family:inherit">pending</text>
+      <rect class="st-r" x="200" y="55" width="120" height="40" rx="20"/><text class="tx-r" x="260" y="80" style="font-family:inherit">running</text>
+      <rect class="st-d" x="420" y="5" width="120" height="34" rx="17"/><text class="tx-d" x="480" y="27" style="font-family:inherit">done ✓</text>
+      <rect class="st-f" x="420" y="50" width="120" height="34" rx="17"/><text class="tx-f" x="480" y="72" style="font-family:inherit">failed ✕</text>
+      <rect class="st-e" x="600" y="58" width="130" height="34" rx="17"/><text class="tx-e" x="665" y="80" style="font-family:inherit">external J</text>
+      <rect class="st-e" x="420" y="105" width="120" height="34" rx="17"/><text class="tx-e" x="480" y="127" style="font-family:inherit">timeout ⏱</text>
+      <path class="edge2" d="M130 75 H196" marker-end="url(#a3)"/>
+      <path class="edge2" d="M320 70 L416 24" marker-end="url(#a3)"/>
+      <path class="edge2" d="M320 75 H416" marker-end="url(#a3)"/>
+      <path class="edge2" d="M320 80 L416 120" marker-end="url(#a3)"/>
+      <path class="edge2" d="M320 62 C420 -10 560 -10 640 54" marker-end="url(#a3)"/>
+    </g>
+  </svg>
+</section>
+
+<!-- ========== 11 ========== -->
+<section class="s rv" id="s11">
+  <span class="eyebrow">11 · UI</span>
+  <h2>Pantallas del diseño → componentes</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Pantalla</th><th>Componentes</th><th>Datos</th></tr></thead>
+    <tbody>
+      <tr><td><b>1 · Dashboard</b></td><td>KpiTiles, LibrariesTable (filtro + búsqueda), ScriptsPanel, JenkinsNotice, LastJobCard</td><td><code>GET /api/libraries</code></td></tr>
+      <tr><td><b>2 · Release</b> (wizard 4 pasos)</td><td>Stepper, LibraryPicker, BumpSelector (radiogroup con versión calculada), ChangelogPreview, CommandPreview, PreflightChecklist</td><td><code>/changesets</code>, <code>POST /api/releases</code></td></tr>
+      <tr><td><b>3 · Proceso</b></td><td>StepTimeline (incluye «Jenkins externo»), LogConsole (SSE, copiar/descargar), JobMeta, JobHistory</td><td><code>/api/jobs/:id/stream</code></td></tr>
+      <tr><td><b>4 · Wrapper</b></td><td>WrapperInfo, DepsTable (checkbox por lib), PackageJsonDiff, CompatChecks, botón «Crear rama y PR»</td><td><code>/api/wrapper</code></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout info" role="note"><span>La versión destino del BumpSelector se calcula con <code>semver.inc(published, bump)</code>, igual que en el servidor, para que la UI nunca muestre algo distinto a lo que se generará.</span></div>
+</section>
+
+<!-- ========== 12 ========== -->
+<section class="s rv" id="s12">
+  <span class="eyebrow">12 · Robustez</span>
+  <h2>Errores, idempotencia y seguridad</h2>
+  <div class="grid">
+    <div class="card"><h4>Punto de no retorno</h4><p>El push del tag. Antes se aborta sin efectos; después, nunca se borran tags automáticamente.</p></div>
+    <div class="card"><h4>Idempotencia</h4><p>Si el tag existe y la versión ya está en Artifactory, el job salta directo al wrapper.</p></div>
+    <div class="card"><h4>Lock por repo</h4><p>Dos jobs sobre la misma librería → <code>409 Conflict</code>.</p></div>
+    <div class="card"><h4>Timeout</h4><p>20 min de polling → estado <code>timeout</code> «Revisar Jenkins» con enlace de solo lectura.</p></div>
+    <div class="card"><h4>Secretos</h4><p><code>ARTIFACTORY_TOKEN</code> y <code>BB_TOKEN</code> solo en env, enmascarados en logs, nunca al frontend.</p></div>
+    <div class="card"><h4>Comandos seguros</h4><p><code>spawn</code> con argumentos en arreglo y <code>shell:false</code>; paquetes validados contra <code>libraries.config.json</code>.</p></div>
+    <div class="card"><h4>Auditoría</h4><p>Cada job guarda quién lo lanzó y el log completo (JSONL por job).</p></div>
+  </div>
+</section>
+
+<!-- ========== 13 ========== -->
+<section class="s rv" id="s13">
+  <span class="eyebrow">13 · Ejecución</span>
+  <h2>Roadmap de tareas para Copilot</h2>
+  <p class="lead">Orden obligatorio por fases. Marca cada tarea al terminarla (el progreso vive solo en esta pestaña).</p>
+  <div class="meter"><span id="pct">0 de 11</span><div class="track"><span id="pctBar"></span></div></div>
+  <div class="lanes" id="lanes"></div>
+</section>
+
+<!-- ========== 14 ========== -->
+<section class="s rv" id="s14">
+  <span class="eyebrow">14 · Escalar</span>
+  <h2>Preparación para Expo</h2>
+  <div class="grid">
+    <div class="card"><h4>Solo autolinking</h4><p>Sin pasos manuales en <code>MainApplication</code> / <code>AppDelegate</code>.</p></div>
+    <div class="card"><h4>Config plugin</h4><p>Si una librería necesita configuración nativa, agregar <code>app.plugin.js</code> para Expo prebuild.</p></div>
+    <div class="card"><h4>Peers alineados</h4><p><code>peerDependencies</code> amplios y alineados con la versión de RN del SDK de Expo objetivo.</p></div>
+    <div class="card"><h4>Contrato estable</h4><p>Los scripts de §5 no cambian: el panel funciona igual con proyectos Expo.</p></div>
+  </div>
+</section>
+
+<!-- ========== 15 ========== -->
+<section class="s rv" id="s15">
+  <span class="eyebrow">15 · Pendientes</span>
+  <h2>Preguntas abiertas</h2>
+  <div class="qa">
+    <div class="q"><b>Bitbucket</b><span>¿Cloud o Data Center? Cambia la API de PR y la autenticación.</span></div>
+    <div class="q"><b>Jenkins</b><span>¿Qué formato de tag lo dispara? ¿Corre <code>npm publish</code> o <code>changeset publish</code>?</span></div>
+    <div class="q"><b>Artifactory</b><span>¿Token o usuario + API key? ¿Repos virtual y local separados?</span></div>
+    <div class="q"><b>Wrapper</b><span>¿Versión exacta de React Native y de <code>@callstack/react-native-brownfield</code>?</span></div>
+    <div class="q"><b>Artefactos nativos</b><span>¿El wrapper genera AAR/XCFramework en su propio pipeline al mergear?</span></div>
+    <div class="q"><b>Permisos</b><span>¿Quién puede lanzar releases? Roles lectura vs. publicar.</span></div>
+  </div>
+</section>
+
+</main>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* reveal + scroll spy + read bar */
+  var io = 'IntersectionObserver' in window ? new IntersectionObserver(function(es){
+    es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); if(e.target.dataset.onview){ window[e.target.dataset.onview](); delete e.target.dataset.onview; } } });
+  },{threshold:.12}) : null;
+  document.querySelectorAll('.rv').forEach(function(el){ io ? io.observe(el) : el.classList.add('in'); });
+  var links = Array.prototype.slice.call(document.querySelectorAll('#toc a'));
+  var secs = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  function onScroll(){
+    var h = document.documentElement; var p = h.scrollTop/(h.scrollHeight-h.clientHeight||1);
+    document.getElementById('readbar').style.width = (p*100)+'%';
+    var cur = 0; secs.forEach(function(s,i){ if(s && s.getBoundingClientRect().top < 140) cur = i; });
+    links.forEach(function(a,i){ a.classList.toggle('on', i===cur); });
+  }
+  window.addEventListener('scroll', onScroll, {passive:true}); onScroll();
+
+  /* tabs + copy */
+  document.querySelectorAll('[data-tabs]').forEach(function(t){
+    var btns = t.querySelectorAll('[role=tab]'), panels = t.querySelectorAll('[role=tabpanel]');
+    btns.forEach(function(b,i){ b.addEventListener('click', function(){
+      btns.forEach(function(x,j){ x.setAttribute('aria-selected', j===i); panels[j].hidden = j!==i; });
+    }); });
+  });
+  /* tooltip */
+  var tip = document.getElementById('tip');
+  function showTip(e, html){ tip.innerHTML = html; tip.style.opacity = 1; tip.style.left = Math.min(e.clientX+14, innerWidth-260)+'px'; tip.style.top = (e.clientY+14)+'px'; }
+  function hideTip(){ tip.style.opacity = 0; }
+
+  /* semver calc */
+  var bump = 'minor';
+  function inc(v,b){ var p = v.trim().split('.').map(Number); if(p.length!==3||p.some(isNaN)) return null;
+    if(b==='major') return (p[0]+1)+'.0.0'; if(b==='minor') return p[0]+'.'+(p[1]+1)+'.0'; return p[0]+'.'+p[1]+'.'+(p[2]+1); }
+  function calc(){ var n = inc(document.getElementById('cv').value, bump);
+    document.getElementById('nv').textContent = n || 'x.y.z inválida';
+    var r = document.getElementById('nr');
+    if(!n){ r.textContent = 'Usa el formato MAJOR.MINOR.PATCH'; return; }
+    if(bump==='major') r.innerHTML = 'Major: <strong>revisión manual</strong>, excluida del wrapper por defecto';
+    else r.innerHTML = 'Rango en wrapper: <code>'+(n.indexOf('0.')===0?'~':'^')+n+'</code>';
+  }
+  document.querySelectorAll('#seg button').forEach(function(b){ b.addEventListener('click', function(){
+    bump = b.dataset.b; document.querySelectorAll('#seg button').forEach(function(x){ x.setAttribute('aria-checked', x===b); }); calc(); }); });
+  document.getElementById('cv').addEventListener('input', calc);
+
+  /* steps data (shared by sim, table, charts) */
+  var STEPS = [
+    {k:'clone', t:'Clonar', c:'git clone --depth 50 <repo>', f:'Abortar', s:2, log:['$ git clone --depth 50 git@bitbucket.org:[WORKSPACE]/rn-auth.git']},
+    {k:'preflight', t:'Preflight', c:'main · árbol limpio · .nvmrc · tag inexistente', f:'Abortar', s:4, log:['✔ rama main al día','✔ Node coincide con .nvmrc','✔ tag v5.2.0 no existe']},
+    {k:'install', t:'Instalar', c:'npm ci / pnpm install --frozen-lockfile', f:'Abortar', s:41, log:['$ npm ci','added 1182 packages in 41s']},
+    {k:'adjust', t:'Ajustar bump', c:'reescribir .changeset/*.md si se forzó', f:'Abortar', s:1, log:['bump minor (sugerido por changesets)']},
+    {k:'bump', t:'Versionar', c:'<pm> run release:bump', f:'Abortar', s:3, log:['$ npm run release:bump','> changeset version','CHANGELOG.md y package.json → 5.2.0']},
+    {k:'verify', t:'Verificar y build', c:'<pm> run release:verify', f:'Abortar (no hay tag)', s:112, log:['$ npm run release:verify','✔ eslint  ✔ tsc  ✔ jest  ✔ bob build']},
+    {k:'tag', t:'Tag y push', c:'<pm> run release:tag', f:'Abortar y reportar', s:6, log:['$ npm run release:tag','git tag v5.2.0 · git push --follow-tags','<span class="lc">→ punto de no retorno: Jenkins toma el control</span>'], pnr:true},
+    {k:'artifactory', t:'Esperar Artifactory', c:'waitForVersion() · npm view', f:'Estado «Revisar Jenkins»', s:210, ext:true, log:['<span class="lw">⏳ npm view @org/rn-auth@5.2.0 (intento 1/40)</span>','<span class="lw">⏳ intento 7/40…</span>','<span class="lok">✔ 5.2.0 disponible en Artifactory</span>']},
+    {k:'wrapper', t:'Actualizar wrapper', c:'sync-wrapper.mjs + PR', f:'Rama sin PR; reintentable', s:30, log:['$ node scripts/sync-wrapper.mjs @org/rn-auth@5.2.0','<span class="lok">✔ PR abierto en Bitbucket</span>']}
+  ];
+
+  var ol = document.getElementById('steps'), tb = document.getElementById('stepTable');
+  STEPS.forEach(function(s,i){
+    var li = document.createElement('li'); li.id = 'st-'+s.k;
+    li.innerHTML = '<span class="dot">'+(i+1)+'</span><div><b>'+s.t+(s.pnr?' <span class="tag">no retorno</span>':'')+(s.ext?' <span class="tag">Jenkins externo</span>':'')+'</b><small>'+s.c.replace(/</g,'&lt;')+'</small></div>';
+    ol.appendChild(li);
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td class="mono">'+(i+1)+'</td><td>'+s.t+'</td><td><code>'+s.c.replace(/</g,'&lt;')+'</code></td><td>'+s.f+'</td>';
+    tb.appendChild(tr);
+  });
+
+  var logEl = document.getElementById('log'), stateEl = document.getElementById('simState'), go = document.getElementById('simGo'), timer = null;
+  function reset(){ clearTimeout(timer); logEl.innerHTML = ''; stateEl.textContent = 'en espera'; go.disabled = false;
+    STEPS.forEach(function(s,i){ var li = document.getElementById('st-'+s.k); li.className=''; li.querySelector('.dot').textContent = i+1; }); }
+  function sim(){
+    reset(); go.disabled = true; stateEl.textContent = 'ejecutando';
+    var i = 0, j = 0, d = reduce ? 0 : 380;
+    function tick(){
+      if(i>=STEPS.length){ stateEl.textContent = 'completado'; go.disabled = false; return; }
+      var s = STEPS[i], li = document.getElementById('st-'+s.k);
+      if(j===0){ li.className = s.ext ? 'run ext' : 'run'; }
+      if(j < s.log.length){ logEl.innerHTML += s.log[j] + '\n'; logEl.scrollTop = logEl.scrollHeight; j++; timer = setTimeout(tick, d); return; }
+      li.className = 'done'; li.querySelector('.dot').textContent = '✓'; i++; j = 0; timer = setTimeout(tick, d);
+    }
+    tick();
+  }
+  go.addEventListener('click', sim); document.getElementById('simReset').addEventListener('click', reset);
+
+  /* duration bars (single series) */
+  var durData = STEPS.filter(function(s){ return s.k!=='adjust' && s.k!=='clone'; });
+  var max = Math.max.apply(null, durData.map(function(s){ return s.s; }));
+  var bars = document.getElementById('durBars'), dt = document.getElementById('durTable');
+  durData.forEach(function(s){
+    var row = document.createElement('div'); row.className = 'bar-row';
+    row.innerHTML = '<span class="lab">'+s.t+'</span><div class="bar-track"><div class="bar-fill" data-w="'+(s.s/max*100)+'"></div></div><span class="val">'+s.s+' s</span>';
+    row.addEventListener('mousemove', function(e){ showTip(e, '<b>'+s.t+'</b><br>'+s.s+' s · '+(s.ext?'espera externa':'trabajo del panel')); });
+    row.addEventListener('mouseleave', hideTip);
+    bars.appendChild(row);
+    dt.innerHTML += '<tr><td>'+s.t+'</td><td class="mono">'+s.s+'</td></tr>';
+  });
+
+  /* donut: local vs external */
+  var local = STEPS.filter(function(s){ return !s.ext; }).reduce(function(a,s){ return a+s.s; },0);
+  var ext = STEPS.filter(function(s){ return s.ext; }).reduce(function(a,s){ return a+s.s; },0);
+  var tot = local+ext, C = 2*Math.PI*15.9155;
+  var parts = [{n:'Trabajo del panel', v:local, c:'var(--series-1)'},{n:'Espera Jenkins / Artifactory', v:ext, c:'var(--series-2)'}];
+  var donut = document.getElementById('donut'), off = 25, svg = '<circle class="donut-bg" cx="21" cy="21" r="15.9155" fill="none" stroke-width="5"/>';
+  parts.forEach(function(p){ var len = p.v/tot*100 - 1.2;
+    svg += '<circle class="seg" cx="21" cy="21" r="15.9155" fill="none" style="stroke:'+p.c+';transition:stroke-dasharray 1.1s cubic-bezier(.2,.7,.2,1)" stroke-width="5" stroke-dasharray="0 100" data-d="'+len+' '+(100-len)+'" stroke-dashoffset="'+off+'"><title>'+p.n+': '+p.v+' s</title></circle>';
+    off -= p.v/tot*100; });
+  svg += '<text x="21" y="21" text-anchor="middle" font-family="Inter" font-weight="700" font-size="6" class="donut-c">'+Math.round(ext/tot*100)+'%</text><text x="21" y="27" text-anchor="middle" font-family="Inter" font-size="2.6" class="donut-s">espera externa</text>';
+  donut.innerHTML = svg;
+  document.getElementById('donutLegend').innerHTML = parts.map(function(p){ return '<span><i class="sw" style="background:'+p.c+'"></i>'+p.n+' · <b class="mono">'+p.v+' s</b></span>'; }).join('');
+
+  /* status stack */
+  var ST = [
+    {n:'Al día', v:1, c:'#0ca30c', i:'✓'},
+    {n:'Pendiente de publicar', v:2, c:'var(--series-1)', i:'●'},
+    {n:'Wrapper desactualizado', v:2, c:'#fab219', i:'!'},
+    {n:'Major: revisar', v:1, c:'#d03b3b', i:'✕'}
+  ];
+  var stack = document.getElementById('stack');
+  ST.forEach(function(s){ var d = document.createElement('div'); d.style.background = s.c; d.dataset.g = s.v;
+    d.addEventListener('mousemove', function(e){ showTip(e, s.i+' <b>'+s.n+'</b><br>'+s.v+' de 6 librerías'); }); d.addEventListener('mouseleave', hideTip);
+    stack.appendChild(d); });
+  document.getElementById('stackLegend').innerHTML = ST.map(function(s){ return '<span><i class="sw" style="background:'+s.c+'"></i>'+s.i+' '+s.n+' · <b>'+s.v+'</b></span>'; }).join('');
+  document.getElementById('stackTable').innerHTML = ST.map(function(s){ return '<tr><td>'+s.i+' '+s.n+'</td><td class="mono">'+s.v+'</td></tr>'; }).join('');
+
+  /* animate charts on view */
+  window.__animBars = function(){ bars.querySelectorAll('.bar-fill').forEach(function(f){ f.style.width = f.dataset.w+'%'; });
+    donut.querySelectorAll('.seg').forEach(function(c){ c.setAttribute('stroke-dasharray', c.dataset.d); }); };
+  window.__animStack = function(){ stack.querySelectorAll('div').forEach(function(d){ d.style.flexGrow = d.dataset.g; }); };
+  document.getElementById('s8').dataset.onview = '__animBars';
+  document.getElementById('s9').dataset.onview = '__animStack';
+  if(!io){ window.__animBars(); window.__animStack(); }
+
+  /* roadmap */
+  var PH = [
+    {n:'Fase 1', d:'Fundaciones', t:[
+      ['Scaffold del panel','pnpm workspace, Express, React + webpack 5. Acepta: pnpm dev levanta ambos; sin Vite.'],
+      ['Config + env','libraries.config.json validado con zod. Acepta: falla al iniciar si falta una variable.'],
+      ['Librerías base','run.mjs, detect-pm.mjs, artifactory.mjs con tests. Acepta: waitForVersion devuelve false tras N intentos.']]},
+    {n:'Fase 2', d:'Lectura', t:[
+      ['GET /api/libraries','Lee package.json, Artifactory y wrapper; calcula status. Acepta: respuesta = LibraryState[].'],
+      ['Pantalla 1 · Dashboard','Conforme al diseño. Acepta: filtro y búsqueda; tabla con scroll horizontal en móvil.']]},
+    {n:'Fase 3', d:'Release', t:[
+      ['Plantillas de librería','check-versions, tag-and-push, config Changesets en templates/library/. Acepta: copiables a un repo.'],
+      ['Cola + release.mjs','Pasos 1–8. Acepta: un fallo en verify no crea tag.'],
+      ['SSE + Pantalla 3','Log en vivo. Acepta: el paso Jenkins se muestra como externo.'],
+      ['Pantalla 2 · Wizard','Acepta: versión calculada = la que genera el servidor.']]},
+    {n:'Fase 4', d:'Wrapper y endurecimiento', t:[
+      ['Wrapper + PR + Pantalla 4','sync-wrapper.mjs, bitbucket.mjs. Acepta: PR con diff correcto; majors excluidos.'],
+      ['Endurecimiento','Lock por repo, enmascarado, historial JSONL, npm.cmd en Windows.']]}
+  ];
+  var lanes = document.getElementById('lanes'), n = 0, total = 0;
+  PH.forEach(function(p){ total += p.t.length; });
+  function upd(){ var c = lanes.querySelectorAll('input:checked').length;
+    document.getElementById('pct').textContent = c+' de '+total; document.getElementById('pctBar').style.width = (c/total*100)+'%'; }
+  PH.forEach(function(p){
+    var lane = document.createElement('div'); lane.className = 'lane';
+    var html = '<div><h4>'+p.n+'</h4><small>'+p.d+'</small></div><div class="chips">';
+    p.t.forEach(function(t){ n++; html += '<label class="chip"><input type="checkbox"><div><b>'+n+'. '+t[0]+'</b><span>'+t[1]+'</span></div></label>'; });
+    lane.innerHTML = html+'</div>'; lanes.appendChild(lane);
+  });
+  lanes.addEventListener('change', function(e){ e.target.closest('.chip').classList.toggle('done', e.target.checked); upd(); });
+  upd();
+
+  /* ===== theme toggle ===== */
+  var themeBtn = document.getElementById('themeBtn');
+  function setTheme(t){ document.documentElement.setAttribute('data-theme', t); themeBtn.setAttribute('aria-pressed', t==='dark'); themeBtn.querySelector('.lbl').textContent = t==='dark' ? 'Claro' : 'Oscuro'; try{ localStorage.setItem('rp-theme', t); }catch(e){} }
+  themeBtn.addEventListener('click', function(){ setTheme(document.documentElement.getAttribute('data-theme')==='dark' ? 'light' : 'dark'); });
+  setTheme(document.documentElement.getAttribute('data-theme') || 'light');
+
+  /* ===== syntax highlighter + editor chrome ===== */
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function hl(src, lang){
+    var out = '', last = 0, re, m;
+    if(lang==='json'){ re = /("(?:\\.|[^"\\\n])*")(\s*:)?|(\/\/[^\n]*)|\b(true|false|null)\b|(-?\b\d+(?:\.\d+)?\b)/g; }
+    else if(lang==='js' || lang==='ts'){ re = /(\/\/[^\n]*)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|\b(import|from|export|const|let|var|function|async|await|return|if|else|for|throw|new|try|catch|type|interface|of|typeof)\b|\b(true|false|null|undefined)\b|\b(\d+)\b|\b([a-zA-Z_]\w*)(?=\()/g; }
+    else if(lang==='env'){ re = /(#[^\n]*)|^([A-Z_][A-Z0-9_]*)(=)([^\n]*)/gm; }
+    else if(lang==='yaml'){ re = /(#[^\n]*)|("(?:\\.|[^"\\\n])*")|^(\s*[\w-]+)(:)/gm; }
+    else if(lang==='tree' || lang==='npmrc'){ re = /(#[^\n]*)|(\$\{[A-Z_]+\}|\[[A-Z_]+\])/g; }
+    else if(lang==='md'){ re = /^(---)$|("(?:\\.|[^"\\\n])*")(\s*:)?/gm; }
+    else return esc(src);
+    while((m = re.exec(src))){
+      out += esc(src.slice(last, m.index));
+      var t = m[0], h;
+      if(lang==='json'){ h = m[1] ? '<span class="'+(m[2]?'xk':'xs')+'">'+esc(m[1])+'</span>'+(m[2]?esc(m[2]):'') : m[3] ? '<span class="xc">'+esc(t)+'</span>' : m[4] ? '<span class="xb">'+t+'</span>' : '<span class="xn">'+t+'</span>'; }
+      else if(lang==='js' || lang==='ts'){ h = m[1] ? '<span class="xc">'+esc(t)+'</span>' : m[2] ? '<span class="xs">'+esc(t)+'</span>' : m[3] ? '<span class="xkw">'+t+'</span>' : m[4] ? '<span class="xb">'+t+'</span>' : m[5] ? '<span class="xn">'+t+'</span>' : '<span class="xf">'+t+'</span>'; }
+      else if(lang==='env'){ h = m[1] ? '<span class="xc">'+esc(t)+'</span>' : '<span class="xk">'+m[2]+'</span>'+m[3]+'<span class="xs">'+esc(m[4])+'</span>'; }
+      else if(lang==='yaml'){ h = m[1] ? '<span class="xc">'+esc(t)+'</span>' : m[2] ? '<span class="xs">'+esc(t)+'</span>' : '<span class="xk">'+esc(m[3])+'</span>'+m[4]; }
+      else if(lang==='md'){ h = m[1] ? '<span class="xc">---</span>' : '<span class="'+(m[3]?'xk':'xs')+'">'+esc(m[2])+'</span>'+(m[3]?esc(m[3]):''); }
+      else { h = m[1] ? '<span class="xc">'+esc(t)+'</span>' : '<span class="xn">'+esc(t)+'</span>'; }
+      out += h; last = m.index + t.length;
+      if(t.length===0) re.lastIndex++;
+    }
+    return out + esc(src.slice(last));
+  }
+  function guessLang(t){ var s = t.trim();
+    if(/^---\n/.test(s)) return 'md';
+    if(s[0]==='{' ) return 'json';
+    if(/^\w[\w-]*:/m.test(s) && !/[;{}()]/.test(s)) return 'yaml';
+    if(/^@|^\/\//.test(s) && /registry/.test(s)) return 'npmrc';
+    if(/\b(type|interface)\s+\w+/.test(s) && !/import /.test(s)) return 'ts';
+    return 'js'; }
+  var COPY_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+  document.querySelectorAll('main pre').forEach(function(pre){
+    if(pre.closest('.code')) return;
+    var codeEl = pre.querySelector('code') || pre, raw = codeEl.textContent.replace(/\n$/,'');
+    var lang = pre.dataset.lang || guessLang(raw);
+    var file = pre.dataset.file;
+    if(!file){ var panel = pre.closest('[role=tabpanel]'); if(panel){ var tabs = panel.parentNode.querySelectorAll('[role=tabpanel]'), btns = panel.parentNode.querySelectorAll('[role=tab]'); var idx = Array.prototype.indexOf.call(tabs, panel); file = btns[idx] ? btns[idx].textContent.trim() : 'snippet'; } else file = pre.dataset.title || 'snippet'; }
+    var lines = hl(raw, lang).split('\n').map(function(l){ return '<span class="ln">'+(l||' ')+'</span>'; }).join('');
+    var fig = document.createElement('figure'); fig.className = 'code';
+    fig.innerHTML = '<div class="code-h"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-file">'+esc(file)+'</span><span class="code-lang">'+lang+'</span><button type="button" class="code-copy">'+COPY_ICON+'<span>Copiar</span></button></div>';
+    var npre = document.createElement('pre'); npre.innerHTML = '<code>'+lines+'</code>'; npre.dataset.raw = raw; if(pre.id) fig.id = pre.id;
+    fig.appendChild(npre); pre.parentNode.replaceChild(fig, pre);
+    fig.querySelector('.code-copy').addEventListener('click', function(){ var b = this, l = b.querySelector('span');
+      try{ navigator.clipboard.writeText(raw).then(function(){ l.textContent = 'Copiado'; setTimeout(function(){ l.textContent = 'Copiar'; }, 1400); }, function(){ l.textContent = 'Selecciona y copia'; }); }catch(e){ l.textContent = 'Selecciona y copia'; } });
+  });
+
+  /* ===== script cards → highlight in package.json ===== */
+  document.querySelectorAll('#pipe .sc').forEach(function(card){
+    card.addEventListener('click', function(){
+      var key = card.dataset.script, on = card.getAttribute('aria-pressed')!=='true';
+      document.querySelectorAll('#pipe .sc').forEach(function(c){ c.setAttribute('aria-pressed','false'); });
+      var fig = document.getElementById('pkgScripts');
+      fig.querySelectorAll('.ln').forEach(function(l){ l.classList.remove('hl'); });
+      var tl = fig.closest('[data-tabs]').querySelector('[role=tab]'); if(tl) tl.click();
+      if(!on) return;
+      card.setAttribute('aria-pressed','true');
+      fig.querySelectorAll('.ln').forEach(function(l){ if(l.textContent.indexOf('"'+key+'"')>-1 || (key==='release:verify' && /"(lint|typecheck|test|build)":/.test(l.textContent))) l.classList.add('hl'); });
+      fig.scrollIntoView({behavior: reduce ? 'auto' : 'smooth', block:'center'});
+    });
+  });
+
+  /* ===== file explorer ===== */
+  var COL = {mjs:'#E8B03A', tsx:'#3987e5', json:'#3FB27F', cjs:'#E8B03A', yaml:'#e87ba4', env:'#9AA3B3', nvmrc:'#9AA3B3', dir:'#E8B03A'};
+  var TREE = {n:'release-panel', d:'Raíz del monorepo pnpm. Contiene solo configuración compartida; el código vive en server/ y web/.', c:[
+    {n:'package.json', d:'Scripts raíz que orquestan ambos paquetes.', role:'Config', uses:'pnpm dev · build · test', deps:'—', r:['dev levanta server y web en paralelo','build compila web con webpack 5','test corre los tests de ambos paquetes']},
+    {n:'pnpm-workspace.yaml', d:'Declara los paquetes del workspace.', role:'Config', uses:'pnpm', deps:'—', r:['packages: server, web']},
+    {n:'.nvmrc', d:'Versión de Node fijada para el panel.', role:'Config', uses:'Preflight', deps:'—', r:['Misma regla que se exige a las librerías']},
+    {n:'.env.example', t:'env', d:'Variables requeridas. Se valida al arrancar.', role:'Config', uses:'server/src/index.mjs', deps:'zod', r:['Tokens solo aquí, nunca en el repo','Falla rápido si falta una variable']},
+    {n:'libraries.config.json', d:'Catálogo de librerías y del wrapper.', role:'Config', uses:'Todas las rutas /api', deps:'—', r:['Lista blanca: solo estos paquetes se pueden operar','El gestor (pnpm/npm) se detecta, no se configura']},
+    {n:'templates', c:[{n:'library', c:[
+      {n:'check-versions.mjs', d:'Plantilla del script release:check para cada librería.', role:'Plantilla', uses:'Dashboard', deps:'npm view', r:['Imprime JSON: repoVersion, published, pendingChangesets']},
+      {n:'tag-and-push.mjs', d:'Plantilla del script release:tag.', role:'Plantilla', uses:'Paso 7 · Tag y push', deps:'git', r:['Valida rama main y tag inexistente','Commit + tag anotado + push --follow-tags']},
+      {n:'changeset.config.json', d:'Config base de Changesets.', role:'Plantilla', uses:'release:bump', deps:'@changesets/cli', r:['access: restricted, baseBranch: main']}]}]},
+    {n:'server', c:[{n:'src', c:[
+      {n:'index.mjs', d:'Arranque de Express: rutas REST, SSE y validación de env.', role:'Entrada', uses:'Todas las pantallas', deps:'express, zod', r:['Monta /api/libraries, /api/releases, /api/jobs, /api/wrapper','Expone /api/jobs/:id/stream (SSE)']},
+      {n:'jobs', c:[
+        {n:'queue.mjs', d:'Cola en memoria con lock por repo.', role:'Orquestación', uses:'POST /api/releases', deps:'—', r:['Un job a la vez por librería (409 si choca)','Emite eventos log/step/done']},
+        {n:'release.mjs', d:'Orquesta los 9 pasos del release.', role:'Orquestación', uses:'Pantalla 3', deps:'run, detect-pm, artifactory', r:['Clon temporal por job','Aborta antes del tag ante cualquier fallo','Idempotente si la versión ya existe']},
+        {n:'wrapper.mjs', d:'Actualiza el wrapper y abre el PR.', role:'Orquestación', uses:'Pantalla 4', deps:'run, bitbucket, semver', r:['Chequeos de compatibilidad antes del PR','Excluye majors por defecto']}]},
+      {n:'lib', c:[
+        {n:'run.mjs', d:'spawn con streaming de líneas y enmascarado de secretos.', role:'Infra', uses:'Todos los jobs', deps:'node:child_process', r:['shell:false y argumentos en arreglo','Reemplaza tokens por ***']},
+        {n:'detect-pm.mjs', d:'Detecta pnpm o npm por lockfile.', role:'Infra', uses:'Paso 3 · Instalar', deps:'node:fs', r:['pnpm-lock.yaml → pnpm','package-lock.json → npm','Windows: .cmd']},
+        {n:'artifactory.mjs', d:'Consulta y polling contra el registry.', role:'Infra', uses:'Dashboard · Paso 8', deps:'npm view', r:['latestVersion, versionExists, waitForVersion','Timeout → estado Revisar Jenkins']},
+        {n:'bitbucket.mjs', d:'Cliente mínimo para abrir PRs.', role:'Infra', uses:'Pantalla 4', deps:'fetch', r:['Cloud API 2.0 o Data Center 1.0 (CONFIRMAR)']}]}]}]},
+    {n:'web', c:[
+      {n:'webpack.config.cjs', d:'Bundler del frontend (sin Vite).', role:'Config', uses:'pnpm build', deps:'webpack 5, babel o ts-loader', r:['Dev server con proxy a /api']},
+      {n:'src', c:[{n:'pages', c:[
+        {n:'Libraries.tsx', d:'Pantalla 1 · Dashboard de librerías.', role:'UI', uses:'GET /api/libraries', deps:'—', r:['KPIs, tabla con filtro y búsqueda','Panel de scripts y aviso de Jenkins']},
+        {n:'Release.tsx', d:'Pantalla 2 · Wizard de release.', role:'UI', uses:'POST /api/releases', deps:'semver', r:['4 pasos: libs, bump, verificar/tag, wrapper','Versión calculada con semver.inc']},
+        {n:'Job.tsx', d:'Pantalla 3 · Proceso y logs.', role:'UI', uses:'SSE /api/jobs/:id/stream', deps:'EventSource', r:['Timeline de pasos y log en vivo','Historial de jobs']},
+        {n:'Wrapper.tsx', d:'Pantalla 4 · Wrapper brownfield.', role:'UI', uses:'/api/wrapper', deps:'—', r:['Tabla actual vs destino, diff y chequeos','Botón Crear rama y PR']}]}]}]}
+  ]};
+  var exTree = document.getElementById('exTree'), exDetail = document.getElementById('exDetail'), current = null;
+  function extOf(n){ var m = n.match(/\.([a-z]+)$/); return m ? m[1] : (n[0]==='.' ? n.slice(1) : 'dir'); }
+  function fileIcon(node){ if(node.c) return '<svg class="fi" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#E8B03A"/></svg>';
+    var col = COL[node.t || extOf(node.n)] || '#9AA3B3';
+    return '<svg class="fi" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="'+col+'" opacity=".22"/><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="none" stroke="'+col+'" stroke-width="1.6"/></svg>'; }
+  function count(node){ return node.c ? node.c.reduce(function(a,c){ return a + count(c); }, 0) : 1; }
+  function show(node, path, btn){
+    if(current) current.setAttribute('aria-current','false'); current = btn; btn.setAttribute('aria-current','true');
+    if(node.c){ exDetail.innerHTML = '<span class="ex-path">'+esc(path)+'/</span><div class="ex-title">'+fileIcon(node)+'<h4>'+esc(node.n)+'/</h4></div><p style="margin:0;color:var(--fg2)">'+(node.d || 'Carpeta con '+count(node)+' archivos.')+'</p><div class="ex-meta"><div><b>Archivos</b>'+count(node)+'</div><div><b>Contiene</b>'+node.c.map(function(c){ return esc(c.n); }).join(', ')+'</div></div>'; return; }
+    exDetail.innerHTML = '<span class="ex-path">'+esc(path)+'</span><div class="ex-title">'+fileIcon(node)+'<h4>'+esc(node.n)+'</h4><span class="tag blue">'+node.role+'</span></div><p style="margin:0;color:var(--fg2)">'+node.d+'</p>'
+      + '<div class="ex-meta"><div><b>Lo usa</b>'+esc(node.uses)+'</div><div><b>Depende de</b>'+esc(node.deps)+'</div></div>'
+      + '<div><b style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Responsabilidades</b><ul class="ex-list">'+node.r.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul></div>';
+  }
+  function build(node, path, depth){
+    var li = document.createElement('li'), btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'ex-node';
+    var p = path ? path + '/' + node.n : node.n;
+    btn.innerHTML = (node.c ? '<svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>' : '<span class="chev"></span>') + fileIcon(node) + '<span>'+esc(node.n)+'</span>' + (node.c ? '<span class="badge">'+count(node)+'</span>' : '');
+    li.appendChild(btn);
+    if(node.c){ var ul = document.createElement('ul'); node.c.forEach(function(c){ ul.appendChild(build(c, p, depth+1)); }); li.appendChild(ul);
+      var open = depth < 3; btn.setAttribute('aria-expanded', open); ul.hidden = !open;
+      btn.addEventListener('click', function(){ var o = btn.getAttribute('aria-expanded')==='true'; btn.setAttribute('aria-expanded', !o); ul.hidden = o; show(node, p, btn); });
+    } else btn.addEventListener('click', function(){ show(node, p, btn); });
+    return li;
+  }
+  var rootUl = document.createElement('ul'); rootUl.appendChild(build(TREE, '', 0)); exTree.appendChild(rootUl);
+  var first = Array.prototype.find.call(exTree.querySelectorAll('.ex-node'), function(b){ return b.textContent.indexOf('release.mjs')>-1; });
+  // default selection: server/src/jobs/release.mjs
+  (function sel(n, p){ if(n.n==='release.mjs'){ show(n, p, first); return true; } return n.c && n.c.some(function(c){ return sel(c, p ? p+'/'+c.n : c.n); }); })(TREE, 'release-panel');
+
+})();
+</script>
+</body>
+</html>
